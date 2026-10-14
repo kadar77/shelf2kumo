@@ -16,7 +16,8 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm check:secrets",
     "emulators": "pnpm build && firebase emulators:start --only functions,hosting",
     "emulators:all": "pnpm build && firebase emulators:start",
-    "smoke:amd": "tsx --env-file-if-exists=.env.local scripts/amd-smoke.ts"
+    "smoke:amd": "tsx --env-file-if-exists=.env.local scripts/amd-smoke.ts",
+    "eval:images": "node scripts/render-test-images.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

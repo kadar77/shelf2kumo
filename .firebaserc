@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-shelf2kumo"
+    "default": "demo-shelf2kumo",
+    "dev": "shelf2kumo"
   }
 }

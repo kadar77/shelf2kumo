@@ -63,6 +63,13 @@ export function imageDataUrlPart(bytes: Uint8Array, mimeType: 'image/jpeg' | 'im
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
+/** Safe diagnostic: the underlying system/undici error code (e.g. ECONNRESET), never a message or payload. */
+function networkErrorCode(error: unknown): string {
+  const cause = error instanceof Error ? (error.cause as { code?: unknown } | undefined) : undefined;
+  if (cause && typeof cause.code === 'string' && /^[A-Z0-9_]{2,40}$/.test(cause.code)) return cause.code;
+  return error instanceof Error ? error.name : 'unknown';
+}
+
 export async function chatCompletion(
   config: AmdConfig,
   request: ChatCompletionRequest,
@@ -86,7 +93,7 @@ export async function chatCompletion(
   } catch (error) {
     if (timeout.aborted) throw new AmdError('timeout', `Request timed out after ${config.timeoutMs} ms`, { retryable: true });
     if (request.signal?.aborted) throw new AmdError('aborted', 'Request aborted');
-    throw new AmdError('network', `Network error: ${error instanceof Error ? error.name : 'unknown'}`, { retryable: true });
+    throw new AmdError('network', `Network error: ${networkErrorCode(error)}`, { retryable: true });
   }
 
   const latencyMs = Math.round(performance.now() - started);

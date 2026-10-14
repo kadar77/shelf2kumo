@@ -1,0 +1,31 @@
+{
+  "s1-hojicha-pouch": {
+    "productCount": 1,
+    "items": [{ "name": "ほうじ茶", "priceJpy": 864, "taxTreatment": "included" }],
+    "visibleText": ["ほうじ茶", "京都・宇治", "内容量 100g", "ほうじ茶 100g", "864円", "（税込）"]
+  },
+  "s2-bowl-no-price": {
+    "productCount": 1,
+    "items": [{ "name": "粉引の飯碗", "priceJpy": null, "taxTreatment": "unknown" }],
+    "visibleText": ["粉引の飯碗", "作家：山田窯"]
+  },
+  "s3-spoon-tax-excluded": {
+    "productCount": 1,
+    "items": [{ "name": "真鍮のティースプーン", "priceJpy": 1800, "taxTreatment": "excluded" }],
+    "visibleText": ["真鍮のティースプーン", "¥1,800", "（税抜）"]
+  },
+  "s4-shelf-three-jars": {
+    "productCount": 3,
+    "items": [
+      { "name": "柚子ジャム", "priceJpy": 650, "taxTreatment": "included" },
+      { "name": "梅ジャム", "priceJpy": 650, "taxTreatment": "included" },
+      { "name": "いちごジャム", "priceJpy": 700, "taxTreatment": "included" }
+    ],
+    "visibleText": ["柚子ジャム", "梅ジャム", "いちごジャム", "650円", "700円", "表示価格はすべて税込です"]
+  },
+  "s5-pop-card-linen": {
+    "productCount": 1,
+    "items": [{ "name": "手織りの麻ふきん", "priceJpy": 1320, "taxTreatment": "included" }],
+    "visibleText": ["店長おすすめ！", "手織りの麻ふきん", "使うほどやわらかく", "1,320円", "税込"]
+  }
+}

@@ -11,8 +11,9 @@ coverage/
 .env
 .env.*
 !.env.example
-# Non-secret parameters for the offline emulator project only
+# Non-secret function parameters per Firebase project
 !functions/.env.demo-shelf2kumo
+!functions/.env.shelf2kumo
 *.pem
 service-account*.json
 .runtimeconfig.json

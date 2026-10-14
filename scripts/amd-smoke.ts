@@ -3,15 +3,29 @@
 //
 //   pnpm smoke:amd                                   text request
 //   pnpm smoke:amd --image path/to.jpg --consented   vision compatibility gate (hypothesized payload)
+//   pnpm smoke:amd --model <name>                    try another model explicitly
 //
+// The model is the spec default unless --model is given; a shell AMD_MODEL is deliberately ignored
+// so gate evidence always names the model under test.
 // Prints sanitized evidence only: no key, headers, provider metadata or image bytes.
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
-import { AmdError, chatCompletion, imageDataUrlPart, loadAmdConfig, type ChatMessage } from '../packages/ai/src/index.ts';
+import {
+  AmdError,
+  DEFAULT_AMD_MODEL,
+  chatCompletion,
+  imageDataUrlPart,
+  loadAmdConfig,
+  type ChatMessage,
+} from '../packages/ai/src/index.ts';
 
 const args = process.argv.slice(2);
-const imageIndex = args.indexOf('--image');
-const imagePath = imageIndex >= 0 ? args[imageIndex + 1] : undefined;
+function flag(name: string): string | undefined {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+const imagePath = flag('--image');
+const model = flag('--model') ?? DEFAULT_AMD_MODEL;
 
 const MIME: Record<string, 'image/jpeg' | 'image/png' | 'image/webp'> = {
   '.jpg': 'image/jpeg',
@@ -44,7 +58,7 @@ async function buildMessages(): Promise<{ mode: 'text' | 'image'; messages: Chat
   };
 }
 
-const config = loadAmdConfig(process.env);
+const config = loadAmdConfig({ ...process.env, AMD_MODEL: model });
 const { mode, messages } = await buildMessages();
 const startedAt = new Date().toISOString();
 
@@ -72,7 +86,7 @@ try {
 } catch (error) {
   const details =
     error instanceof AmdError
-      ? { kind: error.kind, status: error.status ?? null, retryable: error.retryable }
+      ? { kind: error.kind, status: error.status ?? null, retryable: error.retryable, detail: error.message }
       : { kind: 'unexpected', name: error instanceof Error ? error.name : 'unknown' };
   console.log(JSON.stringify({ outcome: 'failed', mode, startedAt, ...details }, null, 2));
   process.exitCode = 1;

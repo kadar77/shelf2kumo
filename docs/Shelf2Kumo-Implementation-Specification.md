@@ -66,8 +66,8 @@ These apply everywhere; later sections do not repeat them.
 | AMD request model | Confirmed by sample | `MiniCPM-V-4.7-35B-A3B` |
 | Response text location | Confirmed by sample | `choices[0].message.content` |
 | Response model identity | Observed | May be `self-dploy/MiniCPM-V-4.7-35B-A3B`; do not require equality with request model |
-| Reachability/latency from Cloud Functions region | **Unverified** | Phase 0 check from the deployed region, not only from a laptop |
-| Image message format and limits | **Unverified** | Phase 0 vision gate |
+| Reachability/latency from Cloud Functions region | **Unverified; observed unstable** | From a laptop in Japan the path degraded for minutes (TCP connect 8–12 s, TLS failures) before recovering to ~0.1 s. Verify from the deployed region; budget retries and a user-visible "AI is slow" state |
+| Image message format | **Confirmed** (one synthetic image) | `image_url` part with a base64 JPEG data URL is accepted and the image is consumed (≈490 image tokens). Size limits remain unverified |
 | JSON mode, schema mode, tools, streaming | Unverified; not required | Schema-validated JSON proposals |
 | Japanese action-planning reliability | **Unverified; known risk** | MiniCPM-V is a vision model; keep action set small, few-shot prompts, deterministic UI shortcuts |
 | Fallback vision model | Not chosen | If the vision gate fails, record a reviewed plan B in §12 before switching; never switch automatically |
@@ -530,8 +530,9 @@ Suggested agent handoff:
   - [x] P0-2 Emulator: `/app/**` deep links load; `/s/demo` fixture renders via Hosting → `storefront` rewrite with fingerprinted CSS, cache and CSP headers; 404s correct; no horizontal overflow at 360px (storefront, product, workspace). *Blocked:* dev Firebase project not created.
   - [x] P0-3 `pnpm check:secrets` passed on `apps/web/dist`, including a scan for the actual `AMD_API_KEY` value.
   - [ ] P0-4 *Local pass:* MiniCPM-V text request from a laptop, 2026-10-14T17:54:47Z, 1,016 ms, `finish_reason: stop`, returned model `self-dploy/MiniCPM-V-4.7-35B-A3B`, Japanese reply. *Blocked:* request from a deployed function in `asia-northeast1` (no Firebase project yet).
-  - [ ] P0-5 Vision compatibility gate. *Blocked:* no consented test image provided. Run `pnpm smoke:amd --image <path> --consented`.
-  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Blocked:* needs a Firebase project (or Java for the Storage emulator) and Phase 2 Storage rules.
+  - [x] P0-5 Vision compatibility gate **passed** (laptop): 2026-10-14T23:53:40Z, synthetic `s1-hojicha-pouch.jpg` (1200×900 JPEG, 132 KB) as a base64 `image_url` data URL; MiniCPM-V answered 「ほうじ茶」 (correct), 504 prompt tokens, 4,737 ms, `finish_reason: stop`. An earlier attempt at 23:48Z failed with `UND_ERR_CONNECT_TIMEOUT` during a network-path degradation (see §3). Synthetic image only; real-photo quality is not measured.
+  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Blocked:* Storage bucket not created on `shelf2kumo` (needs Blaze plan) or Java for the Storage emulator, plus Phase 2 Storage rules.
+  - Firebase project `shelf2kumo` (checked via CLI 2026-10-15): Hosting site `shelf2kumo.web.app` exists; no web app registered; Firestore API not enabled (no database); billing plan and Storage bucket not checkable without `gcloud`. Aliased as `dev` in `.firebaserc`; `default` stays the offline `demo-shelf2kumo`.
 - [ ] Phase 1: identity and isolation.
 - [ ] Phase 2: private upload and adapter.
 - [ ] Phase 3: extraction jobs and automatic catalog.
@@ -569,7 +570,9 @@ Suggested agent handoff:
 | 2026-10-15 | Phase 0: esbuild bundles the storefront renderer from source instead of `vite build --ssr` | Storefront components import no CSS or Vite-specific assets, so one bundler step suffices; output is a self-contained `functions/deploy/` |
 | 2026-10-15 | Phase 0: emulator storefront serves the labeled demo fixture when no Firestore emulator runs | Java is not installed locally; production always reads `publishedCatalogs` → releases |
 | 2026-10-15 | Phase 0: Hosting emulator on port 5050 | macOS reserves port 5000 for AirPlay |
-| 2026-10-15 | Observed: local shell sets `AMD_MODEL=DeepSeek-V4.1-Flash` (and an unused `AMD_BASE_URL`) | Overrides the spec default; P0-4 evidence was rerun with `AMD_MODEL=MiniCPM-V-4.7-35B-A3B`. **Open:** confirm whether DeepSeek is intended for chat planning |
+| 2026-10-15 | Local shell `AMD_MODEL=DeepSeek-V4.1-Flash` is for the owner's own testing only | Owner confirmed: ignore it. `pnpm smoke:amd` now always uses the spec model unless `--model` is passed |
+| 2026-10-15 | Synthetic evaluation set `synthetic-v1` (5 Chrome-rendered scenes with ground truth) | No consented real photos yet; project-generated images have no license/consent issues. Not evidence of real-photo quality |
+| 2026-10-15 | Adapter reports the underlying network error code (e.g. `UND_ERR_CONNECT_TIMEOUT`) | Needed to diagnose the unstable path to the .cn endpoint; codes contain no secrets. **Follow-up (Phase 2):** consider a longer connect timeout via an undici dispatcher if regional checks show slow handshakes |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

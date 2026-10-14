@@ -1,0 +1,12 @@
+{
+  "datasetVersion": "synthetic-v1",
+  "groundTruthPath": "ground-truth.json",
+  "notes": "Synthetic scenes rendered by scripts/render-test-images.mjs. They check pipeline compatibility and basic Japanese text reading only; they are not evidence of real-photo recognition quality.",
+  "images": [
+    { "id": "s1-hojicha-pouch", "path": "images/synthetic/s1-hojicha-pouch.jpg", "mode": "single", "source": "synthetic", "license": "project-generated" },
+    { "id": "s2-bowl-no-price", "path": "images/synthetic/s2-bowl-no-price.jpg", "mode": "single", "source": "synthetic", "license": "project-generated" },
+    { "id": "s3-spoon-tax-excluded", "path": "images/synthetic/s3-spoon-tax-excluded.jpg", "mode": "single", "source": "synthetic", "license": "project-generated" },
+    { "id": "s4-shelf-three-jars", "path": "images/synthetic/s4-shelf-three-jars.jpg", "mode": "shelf", "source": "synthetic", "license": "project-generated" },
+    { "id": "s5-pop-card-linen", "path": "images/synthetic/s5-pop-card-linen.jpg", "mode": "single", "source": "synthetic", "license": "project-generated" }
+  ]
+}

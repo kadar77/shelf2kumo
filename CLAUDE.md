@@ -10,7 +10,7 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phase 0 scaffolding is done locally; its cloud checks (P0-2 dev project, P0-4 from region, P0-5 vision, P0-6) are blocked on a Firebase project and a consented test image. See spec §12. Phase 1 (identity, shop profile, isolation) is next.
+Phase 0 is done locally, including the vision gate (P0-5, synthetic image). Remaining cloud checks (P0-2 dev deploy, P0-4 from region, P0-6) wait on Blaze billing, Firestore and Storage setup in project `shelf2kumo`. See spec §12. Phase 1 (identity, shop profile, isolation) is next.
 
 The workspace currently reads the labeled demo fixture (`apps/web/src/workspace/fixtures.ts`); real data arrives with Phases 1–3.
 
@@ -39,7 +39,8 @@ pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
 | `pnpm verify` | All of the above in CI order |
 | `pnpm emulators` | Build, then Functions + Hosting emulators (Hosting at http://127.0.0.1:5050, demo project `demo-shelf2kumo`) |
 | `pnpm emulators:all` | Same plus Auth/Firestore/Storage emulators (requires Java) |
-| `pnpm smoke:amd [--image <path> --consented]` | ONE paid AMD request; manual only, never in tests |
+| `pnpm smoke:amd [--image <path> --consented] [--model <name>]` | ONE paid AMD request; manual only, never in tests |
+| `pnpm eval:images` | Render the synthetic evaluation images (needs local Chrome) into `evaluation/images/synthetic/` |
 
 Single package: `pnpm --filter @shelf2kumo/web test`, etc.
 
@@ -48,7 +49,8 @@ Layout notes:
 - `functions/deploy/` is generated (gitignored) and is the Functions source directory in `firebase.json`.
 - Storefront CSS must stay scoped under `.sf`; the workspace preview imports it.
 - Non-secret function params live in `functions/.env.<projectId>` (copied into `deploy/` at build).
-- The local shell may export `AMD_MODEL` (e.g. a non-vision model); pass `AMD_MODEL=MiniCPM-V-4.7-35B-A3B` explicitly when checking the spec model.
+- The owner's shell may export `AMD_MODEL` for unrelated testing; ignore it. `smoke:amd` always uses the spec model unless `--model` is passed.
+- Firebase: `default` alias = offline `demo-shelf2kumo` (emulators); real project `shelf2kumo` = alias `dev`. Deploy only with an explicit `-P dev`, and only when asked.
 
 ## Non-negotiable rules
 

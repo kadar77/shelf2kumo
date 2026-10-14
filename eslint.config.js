@@ -4,9 +4,12 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 const nodeGlobals = {
+  Buffer: 'readonly',
   console: 'readonly',
   process: 'readonly',
+  setTimeout: 'readonly',
   URL: 'readonly',
+  WebSocket: 'readonly',
 };
 
 export default defineConfig(

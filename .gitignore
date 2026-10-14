@@ -1,0 +1,38 @@
+# Dependencies and build output
+node_modules/
+dist/
+.astro/
+functions/lib/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+service-account*.json
+.runtimeconfig.json
+functions/.secret.local
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+storage-debug.log*
+ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
+emulator-data/
+
+# Evaluation data (consent-bound, never committed)
+evaluation/images/
+evaluation/results/
+
+# Local tooling
+.claude/settings.local.json
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

@@ -1,182 +1,224 @@
 # Shelf2Kumo — Implementation Specification
 
-Version: 1.3 · Updated: 2026-10-15 · Status: editable implementation baseline
+Version: 1.4 · Updated: 2026-10-15 · Status: editable implementation baseline
 
 Team: KumoForge  
 Tagline: From Shelf to Cloud, Powered by AI
 
-This document supersedes the earlier Next.js/Supabase/Vercel architecture. The Firebase services and AMD endpoint/model below are confirmed project choices. The owner has adopted a React/Vite conversational workspace, curated AI-customized themes and Astro static storefront publishing. Implementation defaults can be revised during discussion. No application, infrastructure, model benchmark, or live API verification has been executed as part of writing this document.
+This document supersedes the earlier Next.js/Supabase/Vercel architecture and version 1.3 of this specification (see §12). Firebase services and the AMD endpoint/model are confirmed project choices; other defaults may be revised during discussion. No application, infrastructure, model benchmark or live API verification has been executed as part of writing this document.
 
 ## 1. Product and scope
 
 Shelf2Kumo helps small Japanese shops publish featured products from photographs. The primary demonstration is a specialty retail shop; cafés and printed menus are secondary.
 
-**Workflow:** sign in → describe shop in chat → upload photos → products appear automatically → optionally request edits or preview → confirm changes and publish → build and release static pages → share URL or QR code.
+**Workflow:** sign in → describe shop in chat → upload photos → products appear automatically → optionally edit or preview → confirm change summary and publish → share URL or QR code.
 
-### Required MVP
+### MVP requirements
 
-- Japanese-first, mobile-first conversational merchant workspace with editable cards, catalog navigation and a live draft preview.
-- Chat can update shop information, product drafts and storefront theme; direct forms remain available.
-- Three curated modern storefront templates, customized through validated design tokens.
-- Owner-confirmed publication followed by an asynchronous Astro build and Firebase Hosting release.
-- Firebase authentication and one owner per shop; multiple shops per owner are allowed.
-- Shop profile, individual product photographs, automatic catalog updates, optional editing, one publish confirmation and unpublishing.
-- No review queue, candidate-adoption step or per-product approval. “Draft” means saved but not yet published data; it is an internal state, not a required workflow screen.
-- Anonymous public catalog and individual product pages, rendered as HTML with meaningful metadata.
+- Japanese-first, mobile-first conversational merchant workspace with editable product cards, catalog navigation and a live draft preview.
+- Chat can update shop information, products and storefront theme; direct forms remain available for every required field.
+- Curated storefront templates customized through validated design tokens.
+- Owner-confirmed publication; public pages served as server-rendered HTML from immutable release snapshots.
+- Firebase Authentication; one owner per shop; multiple shops per owner allowed.
+- Anonymous public catalog and product pages with meaningful metadata.
 - JPY prices as integers; unknown prices remain `null` and display as `価格はお問い合わせください`.
-- QR sharing and a copy-link action.
+- QR sharing and copy-link.
 - Actual AMD inference for the live AI demonstration; seeded examples are clearly identified as demo data.
 
-### Deferred or excluded
+### Demo-critical path
 
-Multi-product shelf recognition and menu extraction follow the MVP. Comparative model evaluation runs separately when images and ground truth are available. No POS integration, checkout, payments, orders, shipping, inventory synchronization, automatic business-listing registration, marketplace publishing, generated product photography, native app, or self-hosted GPU deployment.
+Hackathon time is limited. Build in this priority order and never let a lower tier delay a higher one.
 
-The product supports online discovery. Search indexing, search ranking, and merchant-listing eligibility are not acceptance promises. Do not invent business addresses, availability, product claims, or customer testimonials.
+| Tier | Scope |
+|---|---|
+| **Must** | Auth, shop profile, private upload, single-product extraction (live, or labeled fixtures if the vision gate fails), auto-created items, form editing, chat edits for price/profile/theme, one publish confirmation, public catalog/product pages, unpublish, QR/copy-link |
+| **Should** | Undo, second and third themes, quotas UI, verified-email gate, sitemap, chat clarification polish |
+| **Later** | Google sign-in, owner-facing rollback, LINE sharing, multi-product shelf and menu extraction (Phase 7), model evaluation (Workstream E) |
 
-## 2. Decisions and verification status
+### Excluded
+
+No POS integration, checkout, payments, orders, shipping, inventory synchronization, automatic business-listing registration, marketplace publishing, generated product photography, native app or self-hosted GPU deployment.
+
+The product supports online discovery. Search indexing, ranking and merchant-listing eligibility are not acceptance promises. Never invent business addresses, availability, product claims or customer testimonials.
+
+## 2. Core principles
+
+These apply everywhere; later sections do not repeat them.
+
+1. **One gate: publish confirmation.** Validated extraction results and chat/form edits save directly as unpublished draft data. There is no review queue, candidate adoption, per-item approval or mandatory preview. The only gate is the owner confirming a change summary before publication. Uncertainty flags are informational.
+2. **Firestore is authoritative; the model only proposes.** AI output is validated data or allowlisted actions. Trusted server code performs every write. AI can never publish, and chat text never overrides ownership or publication state.
+3. **Untrusted input stays data.** Image text, product descriptions and prior messages are never instructions.
+4. **Server enforces everything.** Every command verifies the Firebase ID token, ownership, schema and revision, regardless of UI checks. Never accept a body `ownerId` as authority.
+5. **Immutable releases.** Public pages render only from immutable, owner-confirmed release snapshots. Draft edits never leak to public pages.
+6. **Honest verification.** Fixtures are labeled as fixtures, unrun checks are reported as unrun or blocked, and no accuracy is claimed without measurement.
+7. **One contract.** Chat, forms, preview and public pages share the schemas in `packages/contracts` and the tokens in `packages/themes`. Schemas (Zod) are the source of truth; prose here describes intent.
+
+## 3. Decisions and verification status
 
 | Decision | Status | Implementation consequence |
 |---|---|---|
-| Firebase Auth, Firestore, Cloud Functions, Firebase Hosting | User-selected | Use these services throughout the application |
-| Cloud Storage for Firebase | Proposed supporting service, adopted here | Required for persistent image files; Firestore stores metadata only |
-| React + Vite + TypeScript | Adopted | Conversational owner workspace on Firebase Hosting |
-| Astro static storefronts | Adopted | Build publication-confirmed catalog/profile/theme snapshots into public HTML |
-| Background build job | Required supporting component | Functions coordinate a dedicated Astro build runner; proposed Google Cloud Build |
-| AMD endpoint | Confirmed by user-provided successful request | `https://developer.amd.com.cn/radeon/api/v1/chat/completions` |
+| Firebase Auth, Firestore, Cloud Functions, Firebase Hosting | User-selected | Use throughout |
+| Cloud Storage for Firebase | Adopted | Image files; Firestore stores metadata only |
+| React + Vite + TypeScript | Adopted | Merchant workspace at `/app/**` |
+| Astro storefront, server-rendered on request | Adopted in v1.4 | `@astrojs/node` handler in a Cloud Function behind a Hosting rewrite, CDN-cached; replaces the v1.3 static build pipeline |
+| Region | Proposed: `asia-northeast1` (Tokyo) | Verify availability for Functions/Firestore/Storage in Phase 0 and record actual choices |
+| AMD endpoint | Confirmed by user-provided request | `https://developer.amd.com.cn/radeon/api/v1/chat/completions` |
 | AMD request model | Confirmed by sample | `MiniCPM-V-4.7-35B-A3B` |
 | Response text location | Confirmed by sample | `choices[0].message.content` |
-| Response model identity | Observed in sample | May be `self-dploy/MiniCPM-V-4.7-35B-A3B`; do not require equality with request model |
-| Image message format and limits | Unverified | Test adapter compatibility before claiming functional extraction |
-| JSON mode, schema mode, tools, streaming | Unverified; native support not required | Use schema-validated JSON action proposals; validate conversational reliability before release |
-| Recognition accuracy / model ranking | Not measured | No accuracy claims; evaluation is outside the critical build path |
+| Response model identity | Observed | May be `self-dploy/MiniCPM-V-4.7-35B-A3B`; do not require equality with request model |
+| Reachability/latency from Cloud Functions region | **Unverified** | Phase 0 check from the deployed region, not only from a laptop |
+| Image message format and limits | **Unverified** | Phase 0 vision gate |
+| JSON mode, schema mode, tools, streaming | Unverified; not required | Schema-validated JSON proposals |
+| Japanese action-planning reliability | **Unverified; known risk** | MiniCPM-V is a vision model; keep action set small, few-shot prompts, deterministic UI shortcuts |
+| Fallback vision model | Not chosen | If the vision gate fails, record a reviewed plan B in §12 before switching; never switch automatically |
+| Recognition accuracy / model ranking | Not measured | No accuracy claims; Workstream E |
 
-The text response does not establish Japanese OCR quality, vision compatibility, latency under load, or the underlying hardware used for each request. Preserve provider evidence where available and verify any event-specific evidence requirements separately.
+The successful text response does not establish Japanese OCR quality, vision compatibility, latency under load or the hardware serving each request. Preserve provider evidence where available and verify any event-specific evidence requirements separately.
 
-## 3. Frontend comparison and recommendation
+**Cross-border data.** The endpoint is hosted in China. Product photos may contain people or private details. Show a short Japanese notice at first upload stating that images are sent to an external AI service, recommend product-only photos, and record the data-handling decision in §12. Review obligations under Japan's Act on the Protection of Personal Information (APPI) before any production use; this specification is not legal advice.
 
-| Option | Fit with Firebase Hosting | Dynamic catalog and SEO | Tradeoff for Shelf2Kumo |
-|---|---|---|---|
-| **React + Vite** | Build static assets into `dist`; serve directly from Hosting. Use Cloud Functions for APIs. | Use the SPA for private owner interactions; pair it with Astro for complete public HTML. | Best fit for chat, editable cards and preview controls. **Selected for the owner workspace.** |
-| **Next.js** | Static export can be hosted on Hosting. Full server features need a server deployment; Firebase recommends App Hosting for full-stack Next.js rather than its framework-aware Hosting experiment. | Strong integrated server rendering, metadata and routing. Static export cannot provide arbitrary new shop pages at request time without another approach. | Useful if the project later prioritizes a large server-rendered site and adopts App Hosting. Its server layer overlaps the chosen Cloud Functions backend. |
-| **Astro** | Static output fits Hosting directly; publish events trigger builds of publication-confirmed content. | Excellent for content-heavy pages; static builds require regeneration for new content, while SSR requires server integration. | **Selected for storefronts.** Curated templates produce fast public pages; keep owner interactions in React/Vite. |
+## 4. Frontend choice
 
-**Decision:** use React/Vite for `/app/**` and Astro static output for `/s/**`. Astro renders publication-confirmed shop, product and theme data at publication time. A background build job replaces the previous per-request public renderer. Share contracts and theme tokens between the private preview and Astro; do not ship the merchant bundle to public visitors.
+| Option | Role | Reason |
+|---|---|---|
+| **React + Vite** | Merchant workspace (`/app/**`) | Best fit for chat, editable cards and preview controls; static SPA on Hosting, APIs in Functions |
+| **Astro (SSR, Node adapter)** | Public storefront (`/s/**`) and draft preview | Fast server-rendered HTML with zero client JS by default; the same renderer produces the private preview, guaranteeing parity |
+| Next.js | Not selected | Its server layer overlaps the Cloud Functions backend; full-stack Next.js on Firebase points to App Hosting, adding another platform |
 
-This split accepts a build/release delay in exchange for static storefront delivery. The editor preview updates after each saved draft; the public site changes only after an owner-confirmed release succeeds.
-Next.js was reasonable in the earlier monolithic architecture because it combines UI, API routes and rendering. The requested Firebase architecture already assigns API work to Cloud Functions, so Next.js is no longer the simplest default. This is a project-specific recommendation, not a general framework performance ranking.
+**Why request-time rendering instead of static builds (v1.4 change).** The v1.3 design required Cloud Build, a full-site Hosting manifest, a global release lease, crash reconciliation, removal releases and per-shop rollback assembly, while still serving public HTML as `no-store`, which discarded the CDN benefit. Rendering on request from immutable snapshots, cached at the Hosting CDN with a short `s-maxage`, keeps the same publication guarantees with far less machinery: publish and unpublish become single Firestore transactions, shops never interfere with each other, and publish-to-live time is bounded by the cache TTL instead of a build.
 
-Sources: [Vite static deployment](https://vite.dev/guide/static-deploy.html), [Next.js static exports](https://nextjs.org/docs/app/guides/static-exports), [Firebase Next.js integration guidance](https://firebase.google.com/docs/hosting/frameworks/nextjs), [Astro Firebase deployment](https://docs.astro.build/en/guides/deploy/firebase/). Reviewed 2026-10-15; recheck deployment prerequisites when implementing.
+Sources: [Vite static deployment](https://vite.dev/guide/static-deploy.html), [Astro Node adapter](https://docs.astro.build/en/guides/integrations-guide/node/), [Firebase Hosting with Cloud Functions](https://firebase.google.com/docs/hosting/functions), [Hosting cache behavior](https://firebase.google.com/docs/hosting/manage-cache), [Firebase Next.js guidance](https://firebase.google.com/docs/hosting/frameworks/nextjs). Reviewed 2026-10-15; recheck when implementing.
 
-## 4. Architecture
+## 5. Architecture
 
 ```text
-Owner: React/Vite on Firebase Hosting + Firebase Auth
-  ├─ Chat, image upload, editable cards, catalog and draft preview
-  └─ /api/** → Cloud Functions: authorize, validate and save commands
-                   ├─ Firestore: drafts, conversations, actions and revisions
-                   ├─ Storage: private images and build artifacts
-                   └─ AMD: extraction and structured conversational proposals
+Owner: React/Vite on Firebase Hosting + Firebase Auth + App Check
+  ├─ Chat, upload (client-resized), editable cards, catalog, preview iframe
+  └─ /api/** → Function "api": verify token/App Check, validate, write
+                 ├─ Firestore: shops, items, theme, conversations, actions, releases
+                 ├─ Storage: private originals and renditions
+                 └─ creates job docs → Firestore-triggered workers → AMD
 
-Owner sees change summary → confirms Publish
-  → immutable confirmed snapshot → publication job
-  → dedicated build runner: Astro templates + theme + selected assets
-  → validate complete release → Firebase Hosting version/release
-  → verify live revision → mark published → URL and QR code
+Publish:  prepare-publication → change summary + snapshot hash + confirmation ID
+          → owner confirms → one transaction: write immutable release, move live pointer
 
-Visitor → Firebase Hosting → static catalog/product HTML and selected images
+Visitor → Hosting CDN → Function "storefront" (Astro SSR)
+          reads publishedCatalogs/{slug} → shops/{shopId}/releases/{releaseId}
+          → HTML / media with Cache-Control: public, s-maxage
 ```
 
-Use second-generation Cloud Functions with a currently supported Node.js runtime, pinned at implementation time. Select compatible Functions/Firestore/Storage locations near the target users after checking service availability; record the actual choices before provisioning. Keep development and production in separate Firebase projects. Budget for billable services; confirm current billing prerequisites before deployment.
+### Platform rules
 
-Host `/api/**` through HTTP Functions and rewrite only `/app/**` to the merchant SPA shell. Serve `/s/**`, `/media/**`, `/sitemap.xml` and the landing page as generated static files. Unknown public routes return a real 404. Fingerprinted application bundles may use immutable caching; public shop HTML and product media initially use `no-store` to limit stale content after unpublication. Private responses use `private, no-store`.
+- Second-generation Cloud Functions on a currently supported Node.js runtime pinned at implementation time. Separate Firebase projects for development and production. Budget for billable services; confirm billing prerequisites before deployment.
+- **Hosting routes:** `/api/**` → `api` function; `/s/**`, `/media/**`, `/sitemap.xml` → `storefront` function; `/app/**` → SPA shell; landing page and fingerprinted assets static. Unknown public routes return a real 404.
+- **Request limits:** Hosting-proxied function requests time out at 60 seconds. No `/api` handler waits on AMD; inference runs only in triggered workers. Target API responses under 5 seconds.
+- **Caching:**
 
-Keep inference and publication asynchronous rather than holding a Hosting request open. [Firebase Hosting and Functions](https://firebase.google.com/docs/hosting/functions)
+  | Response | `Cache-Control` (initial) |
+  |---|---|
+  | Fingerprinted workspace assets | `public, max-age=31536000, immutable` |
+  | Storefront HTML | `public, max-age=0, s-maxage=60` |
+  | Published media | `public, max-age=300, s-maxage=300` |
+  | Storefront 404 | `public, max-age=0, s-maxage=10` |
+  | All `/api` responses | `private, no-store` |
 
-### Static publication lifecycle
+  Publish and unpublish take effect immediately at the origin and at the edge within the TTL. Previously downloaded content cannot be recalled.
+- **Security headers:** storefront responses send a strict CSP (no inline script; `script-src 'self'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. The workspace starts with CSP in report-only mode until Firebase SDK origins are enumerated.
+- **App Check** (reCAPTCHA Enterprise provider) is enforced on `/api/**` to protect paid AMD quota; use debug tokens in emulators and development. [App Check](https://firebase.google.com/docs/app-check)
 
-- Proposed runner: Google Cloud Build using a pinned Node/Astro build image and locked dependencies. Functions submit jobs; the browser and AI never receive deployment credentials. This is supporting build infrastructure, not a replacement for the selected Firebase services. Validate permissions, billing and runtime limits during Phase 0.
-- Use trusted repository templates only. AI supplies validated data and theme tokens; it cannot supply shell commands, dependencies, JavaScript, raw HTML, arbitrary CSS or build configuration.
-- Publish confirmation is tied to `shopId`, exact saved revision, item revisions, theme version and publication snapshot hash. Reject stale confirmations with 409. Save an immutable release snapshot before enqueueing.
-- Job states: `queued → building → validating → releasing → published`, with `failed` and `superseded` terminal states. The UI reports “Publishing” until the Hosting release is verified. The existing storefront remains live on build failure.
-- MVP uses one shared Hosting site per environment. Maintain a manifest mapping every shop to its last released artifact, plus the pinned owner-app/landing assets. A release is a complete file manifest: never deploy only one shop's folder and accidentally remove other shops.
-- Serialize all releases, including owner-app updates, through one coordinator. Build artifacts may be prepared independently, but assemble against the latest released manifest under a global fenced lease. Recheck desired shop revisions before release; a stale job must not overwrite a newer publish or resurrect an unpublished shop.
-- Create/finalize a Hosting version, release it, verify its release ID and expected revision marker, then update Firestore's live pointer. Hosting and Firestore cannot commit atomically: a recovery worker reconciles a crash after release using the recorded version/release IDs before retrying. No duplicate build or blind rollback on an ambiguous timeout.
-- Unpublish is an explicit removal release: remove that shop's pages, product images and sitemap entries while preserving other shops. Report “Unpublishing” until verified. Deleting a Firestore snapshot alone does not take static pages offline. Previously downloaded content cannot be recalled.
-- Retain versioned snapshots/artifacts for recovery. Normal per-shop rollback assembles a new complete release with only the chosen shop reverted; do not restore an entire old site version and undo other owners' updates. Apply current unpublish decisions during recovery.
-- Private draft preview is an authenticated React rendering from the same versioned theme contract. It is not a public Hosting preview channel. Test visual parity against generated Astro pages; use private build artifacts for QA. Rebuild when template versions change only through a controlled release workflow.
+### Storefront renderer
 
-Astro's static dynamic routes are enumerated at build time through `getStaticPaths()`. The build consumes immutable snapshots, not mutable live draft queries. [Astro routing](https://docs.astro.build/en/reference/routing-reference/)
+- Astro with `@astrojs/node` in middleware mode, wrapped by an HTTP `onRequest` function deployed as its own Functions codebase. **Verify packaging in Phase 0**; if it fails, deploy the same handler as a Cloud Run service and point the Hosting rewrite at it.
+- Templates are trusted repository code. AI supplies only validated data and theme tokens; never shell commands, dependencies, JavaScript, raw HTML, arbitrary CSS or configuration.
+- The renderer reads only `publishedCatalogs/{slug}` and the referenced release snapshot. Escape all content; emit no source paths, user IDs or raw AI metadata.
+- `/media/{slug}/{contentHash}.jpg` streams a private rendition from Storage only if the live release references that hash; otherwise 404. Storage stays private.
+- `/sitemap.xml` lists live, non-demo catalogs.
+- Static-quality output: pages are fully usable without JavaScript.
 
-Firebase provides APIs for uploading version assets and releasing them programmatically. [Firebase Hosting deployment API](https://firebase.google.com/docs/hosting/api-deploy)
+### Draft preview
+
+The workspace calls `POST /api/shops/:id/preview`; the server renders the current draft through the **same Astro renderer** and returns HTML that embeds 15-minute signed URLs for private renditions. The workspace displays it in a sandboxed `<iframe srcdoc>` (no `allow-scripts`, no `allow-same-origin`), refreshed after each successful save (debounced). Preview is never publicly deployed. Signed URLs require the Functions service account to sign blobs; verify the IAM permission in Phase 0.
 
 ### Suggested repository structure
 
 ```text
-apps/web/                  React/Vite chat workspace, draft preview and landing page
-apps/storefront/           Astro templates, catalog/product routes and metadata
-build/                     Trusted build runner and complete release assembly
-functions/src/api/         Authenticated commands
-functions/src/extraction/  Worker, leases and validation
-functions/src/chat/        Structured proposals and validated action execution
-functions/src/publishing/  Jobs, release coordinator and reconciliation
-packages/themes/          Versioned presets, tokens and preview contract
-packages/contracts/       Shared schemas, types and normalization
-packages/ai/              Server-only AMD adapter and versioned prompt
-scripts/evaluate-models.ts Standalone evaluation entry point (deferred)
-evaluation/               Manifest, ground truth, ignored images/results
-tests/                    Unit, emulator integration and browser tests
-docs/                     Specification, status, deployment and demo notes
-firebase.json
-firestore.rules
-firestore.indexes.json
-storage.rules
-.env.example
+apps/web/                  React/Vite workspace and landing page
+apps/storefront/           Astro SSR templates, routes, metadata, function wrapper
+functions/src/api/         Authenticated HTTP commands
+functions/src/extraction/  Extraction worker, leases, validation
+functions/src/chat/        Action-planning worker and action execution
+functions/src/publishing/  Prepare/publish/unpublish transactions
+functions/src/scheduled/   Lease recovery and upload cleanup
+packages/contracts/        Zod schemas, types, normalization (source of truth)
+packages/themes/           Versioned presets, tokens, contrast validation
+packages/ai/               Server-only AMD adapter and versioned prompts
+scripts/evaluate-models.ts Standalone evaluation entry point (Workstream E)
+evaluation/                Manifest and ground truth; images/results ignored
+tests/                     Unit, emulator integration and browser tests
+docs/                      Specification, deployment and demo notes
+firebase.json · firestore.rules · firestore.indexes.json · storage.rules · .env.example
 ```
 
-Create directories only as needed. Never import the server-only AI package into the browser bundle.
+Create directories only as needed. Never import `packages/ai` into a browser bundle.
 
-## 5. Data contracts and access boundaries
+## 6. Data contracts and access
 
-Use server timestamps and opaque IDs. Documents below are proposed contracts, not existing resources.
+Use server timestamps and opaque IDs. Paths below are proposed contracts.
 
 | Path | Main fields / purpose |
 |---|---|
-| `shops/{shopId}` | `ownerId`, immutable `slug`, name, description, merchant-confirmed address/phone/hours, `isDemo`, draft revision, timestamps |
-| `slugReservations/{slug}` | Unique `shopId`; server transaction reserves slug |
-| `shops/{shopId}/images/{imageId}` | Owner-scoped storage path, validated MIME/bytes/dimensions, generation/hash, upload state, timestamps |
-| `shops/{shopId}/jobs/{jobId}` | Image reference, mode, state, attempt, lease token/expiry, idempotency key, model, prompt version, safe error, timing, usage |
-| `shops/{shopId}/jobs/{jobId}/results/{resultId}` | Private extraction provenance, source evidence and uncertainty flags; internal audit data, never a review queue |
-| `shops/{shopId}/items/{itemId}` | Editable name/description/category, `priceJpy`, `currency: JPY`, tax treatment, image reference, order, revision, source job/result reference and uncertainty flags; no approval fields |
-| `shops/{shopId}/theme/current` | Template ID/version, palette, typography preset, density, image treatment, theme revision |
-| `shops/{shopId}/conversations/{conversationId}/messages/{messageId}` | Owner messages, assistant responses, attachment IDs and action references; private |
-| `shops/{shopId}/actions/{actionId}` | Validated operation, target, expected revision, before/after diff, state and actor |
-| `shops/{shopId}/releases/{revisionId}` | Immutable sanitized profile/items/theme/media snapshot and hash |
-| `shops/{shopId}/publicationJobs/{jobId}` | Requested operation/revision, state, artifact hash, build ID, Hosting version/release IDs and safe errors |
-| `publishedCatalogs/{slug}` | Private live pointer: released revision, Hosting release ID and publication time; reconciled after release |
-| `hostingManifests/{manifestId}` | Server-only complete site artifact mapping, sequence and release ID |
+| `shops/{shopId}` | `ownerId`, `slug`, `slugLocked`, name, description, merchant-confirmed address/phone/hours, `isDemo`, `profileRevision`, `contentRevision`, `liveReleaseId`, timestamps |
+| `slugReservations/{slug}` | `shopId`; server transaction only |
+| `shops/{shopId}/images/{imageId}` | Storage paths (original, rendition), validated MIME/bytes/dimensions, `contentHash`, upload state, timestamps |
+| `shops/{shopId}/items/{itemId}` | name, description, category, `priceJpy`, `currency: "JPY"`, `taxTreatment`, `imageId`, `order`, `revision`, source job reference, `uncertainFields` |
+| `shops/{shopId}/theme/current` | `templateId`, `templateVersion`, tokens, `revision` |
+| `shops/{shopId}/jobs/{jobId}` | Extraction job: image reference, mode, state, attempt, lease token/expiry, idempotency key, model, prompt version, safe error, timing, usage |
+| `shops/{shopId}/jobs/{jobId}/results/{resultId}` | Private provenance: evidence text, uncertainty, raw-output hash |
+| `shops/{shopId}/conversations/{conversationId}/messages/{messageId}` | Owner/assistant messages, attachment image IDs, action references |
+| `shops/{shopId}/chatRequests/{requestId}` | Action-planning request: state, lease, prompt version, safe error |
+| `shops/{shopId}/actions/{actionId}` | Validated operation, targets, expected revisions, before/after diff, state, actor, `undoOf` |
+| `shops/{shopId}/publishConfirmations/{confirmationId}` | `contentRevision`, snapshot hash, change summary, `expiresAt` (10 min), `usedAt` |
+| `shops/{shopId}/releases/{releaseId}` | Immutable sanitized profile/items/theme/media-hash snapshot, hash, `contentRevision`, timestamp |
+| `publishedCatalogs/{slug}` | Server-only live pointer: `shopId`, `releaseId`, `isDemo`, `publishedAt` |
+| `usage/{ownerId}_{yyyymmdd}` | Server-only daily counters: `extractionAttempts`, `chatRequests` (Asia/Tokyo date) |
 
-MVP cap: 50 items per shop, 200 characters per name, 2,000 characters per description, and a serialized public snapshot below 500 KiB. Enforce these application limits before writing; do not rely on Firestore rejecting oversized documents. If growth requires splitting snapshots, introduce immutable version documents and an atomic active-version pointer.
+**Limits (application-enforced before writing):** 50 items per shop; name ≤ 200 characters; description ≤ 2,000 characters; serialized release snapshot < 500 KiB. Do not rely on Firestore rejecting oversized documents.
 
-Every profile, item, theme or catalog-order mutation increments the aggregate shop draft revision transactionally. Publishing captures the exact saved data summarized in the confirmation, with a strict public-field allowlist. Subsequent edits do not alter the immutable release snapshot. Every subsequent edit invalidates outstanding publish confirmations; it never creates a per-item approval requirement. Public data changes only after a successful static release; the live pointer tracks actual Hosting state, not publication intent. Unpublishing follows the removal-release lifecycle above.
-Reserve lowercase ASCII slugs transactionally; Japanese display names remain unrestricted within length limits. Keep slugs immutable in MVP to avoid redirect complexity.
+**Revisions.**
+- Each item, the profile and the theme carry their own `revision`. Edits send the expected revision of the *target only*; a mismatch returns 409. An extraction completing in the background therefore never breaks an unrelated edit.
+- Every mutation also increments `shops/{shopId}.contentRevision` in the same transaction, without an expected-value check. It exists only to bind publish confirmations.
+- Every write uses a transaction; sustained writes stay far below per-document limits for a single owner.
+
+**Slugs.** On shop creation the server reserves a random lowercase ASCII slug (e.g. 8 characters from `[a-z0-9]`). The owner may change it until first publication; it is then locked (`slugLocked`) to avoid redirects. Japanese display names are unrestricted within length limits.
 
 ### Authorization
 
-- Firebase Auth: start with email/password, Japanese sign-in/reset screens and a verified-email gate for paid extraction and publishing. Add Google sign-in later if useful.
-- Clients may read only their own shop trees through Firestore rules. All application data mutations go through authenticated Functions; deny direct client writes.
-- Deny direct client access to slug reservations and published snapshots. Anonymous visitors receive generated static files only. Deny client access to complete Hosting manifests and build credentials; conversation/action records inherit owner isolation.
-- Admin SDK operations bypass Firestore rules: every command must independently verify the Firebase ID token and ownership. Never accept a body `ownerId` as authority.
-- Storage permits owner uploads only to allocated image paths; deny overwrite, listing by other users and public original-image reads. Validate ownership, bytes and MIME in rules and revalidate actual file content server-side.
-- Test rules with two different owners and an anonymous client. Authentication alone is not tenant isolation. [Firestore authorization conditions](https://firebase.google.com/docs/firestore/security/rules-conditions)
+- Firebase Auth email/password with Japanese sign-in/reset screens. **Should:** verified-email gate for extraction and publishing. **Later:** Google sign-in.
+- Firestore rules: owners may read only their own `shops/{shopId}` tree; all client writes denied. `slugReservations`, `publishedCatalogs`, `usage` and releases are server-only. Anonymous visitors receive rendered HTML only.
+- Admin SDK bypasses rules: every command verifies the ID token and shop ownership itself.
+- Storage rules: owners may upload once (no overwrite) to an allocated `owners/{uid}/shops/{shopId}/uploads/{imageId}` path with size and MIME limits; no client reads of other owners' paths, no listing, no public reads. Revalidate actual content server-side.
+- Test rules with two owners and an anonymous client. Authentication alone is not tenant isolation. [Firestore rules conditions](https://firebase.google.com/docs/firestore/security/rules-conditions)
 
 ### Images
 
-Add Cloud Storage for Firebase because photos cannot be stored appropriately as Firestore records. MVP accepts JPEG, PNG and WebP up to 8 MiB per original and 20 megapixels after decode; reject unsupported formats with Japanese guidance. Treat these as application limits, not confirmed AMD limits. Provide a useful HEIC conversion message until conversion is implemented.
+- **Client:** before upload, downscale in the browser to a long edge of 2,048 px, JPEG quality ≈ 0.85, preserving orientation. This cuts mobile upload time and the AMD payload. If resizing fails, upload the original within limits.
+- **Server limits:** JPEG, PNG, WebP; ≤ 8 MiB and ≤ 20 megapixels after decode. Reject others with Japanese guidance; give a helpful HEIC message (iOS usually converts when the file input uses `accept="image/*"`). These are application limits, not confirmed AMD limits.
+- **Processing:** strip EXIF/GPS, create a private JPEG rendition (long edge 1,600 px), record its `contentHash`. Originals and renditions stay private; never create durable public download tokens.
+- **Retention:** keep images while referenced by a draft item or any retained release. A scheduled job removes abandoned uploads after 24 hours. Owners may delete images; never delete media referenced by the live release.
+- Do not present a whole-shelf photo as a single product close-up.
 
-Strip EXIF/GPS and create a bounded JPEG rendition (initial maximum long edge 1,600 px). Originals and AI renditions stay private. Do not generate durable public download tokens for originals. At publication, copy only selected renditions included in the publish confirmation into the static artifact under `/media/{shopId}/{contentHash}.jpg`. Remove unreferenced media from subsequent release manifests. Apply the publication caching policy; private Storage objects remain inaccessible anonymously even after a public rendition is released.
-Source images may contain multiple products or private details. Show the selected image on the product card and include image additions/changes in the publish summary; no separate image approval is required. Do not silently present an entire shelf photo as a product close-up. Keep source images while referenced; remove abandoned uploads through a documented cleanup policy and provide owner deletion. Never delete media that the currently published snapshot still references.
+## 7. State machines
 
-## 6. AMD integration contract
+| Entity | States | Notes |
+|---|---|---|
+| Image upload | `allocated → uploaded → processed` · `rejected` | `processed` once rendition and hash exist |
+| Extraction job | `queued → running → succeeded \| failed` | Lease-protected; `succeeded` writes items in the same transaction |
+| Chat request | `queued → running → succeeded \| failed` | `succeeded` stores the assistant message and proposed/applied actions |
+| Action | `proposed → applied \| rejected \| expired`; `applied → undone` | Undo is a new action with `undoOf` |
+| Publish confirmation | `issued → used \| expired \| stale` | `stale` when `contentRevision` changed or an extraction job is still running |
+| Shop publication | `draft-only → live → unpublished → live …` | Determined by `publishedCatalogs/{slug}` |
+
+## 8. AMD integration
 
 ### Confirmed text request
 
@@ -187,40 +229,29 @@ curl https://developer.amd.com.cn/radeon/api/v1/chat/completions \
   -d '{"model":"MiniCPM-V-4.7-35B-A3B","messages":[{"role":"user","content":"Say hello in one sentence."}]}'
 ```
 
-The supplied response has `choices[0].message.content = "Hello!"`, `finish_reason = "stop"`, usage counters and provider metadata. Optional cost and metadata fields must remain optional. Do not assume cost currency or infer reliable pricing from one response. Do not log full provider metadata, organization identifiers, key hashes, authorization headers or image payloads.
+The supplied response has `choices[0].message.content = "Hello!"`, `finish_reason = "stop"`, usage counters and provider metadata. Cost and metadata fields are optional; do not assume a cost currency. Never log full provider metadata, organization identifiers, key hashes, authorization headers or image payloads.
 
-Configuration:
+### Configuration
 
-- `AMD_API_KEY`: server secret, bound only to extraction and chat workers through Firebase secret management. Local scripts read it from the environment.
-- `AMD_CHAT_COMPLETIONS_URL`: exact full endpoint above; do not append another `/chat/completions`.
-- `AMD_MODEL`: default exactly `MiniCPM-V-4.7-35B-A3B`; no provider prefix in the request.
-- `AMD_REQUEST_TIMEOUT_MS`: initial 45,000; tune using real observations.
-- `EXTRACTION_PROMPT_VERSION`: immutable version recorded with every result.
-- `CHAT_PROMPT_VERSION`: versioned action-planning prompt; use the same model initially with separate validation tests.
+| Variable | Notes |
+|---|---|
+| `AMD_API_KEY` | Secret via Firebase secret management, bound only to extraction and chat workers; local scripts read the environment |
+| `AMD_CHAT_COMPLETIONS_URL` | Exact full endpoint above; do not append `/chat/completions` |
+| `AMD_MODEL` | Default `MiniCPM-V-4.7-35B-A3B`, no provider prefix |
+| `AMD_REQUEST_TIMEOUT_MS` | Initial 45,000; tune from observations |
+| `EXTRACTION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION` | Immutable versions recorded with every result |
 
-No browser `VITE_*` variable may contain the AMD key. Use a server-side adapter with an interface such as `extract({imageBytes, mimeType, mode, signal})`. Implement HTTP with `fetch`; an SDK is optional and must not introduce unsupported parameters.
+No `VITE_*` variable may contain the key. The server-only adapter exposes `extract({imageBytes, mimeType, mode, signal})` and `proposeActions({context, message, signal})`, implemented with `fetch`. Extraction and chat keep separate prompts and schemas.
 
-### Conversational action planning
+### Vision compatibility gate (Phase 0)
 
-Use the same AMD endpoint/model initially for text requests that return a bounded JSON proposal: `message`, `actions`, and optional `clarification`. Each action contains an allowlisted `type`, target ID, expected revision and typed arguments. Native tool calling and JSON mode are not assumed. Add a separate `proposeActions()` adapter method; keep extraction and chat prompts/schemas distinct.
+Proposed message shape: `content` parts with `type: "text"` and `type: "image_url"` carrying a base64 data URL. **This is a hypothesis.** Isolate serialization in the adapter and verify with one authorized, consented image, sent from the deployed Functions region. Prefer inline bytes; do not make originals public for an assumed URL requirement (if a signed URL proves necessary, document lifetime and exposure).
 
-The server supplies the current shop facts and only relevant conversation context. Firestore is authoritative; chat text never overrides ownership or publication state. Image OCR, product descriptions and prior messages are untrusted content. Unsupported actions, unknown targets, cross-shop IDs and malformed JSON produce no mutation. Ambiguous references such as “change this one” require selection or clarification.
-
-Allowlisted MVP actions: update shop profile, create/update/remove a draft item, reorder catalog items, set theme tokens and request a preview. AI may offer publication but cannot execute it without the single server-validated owner confirmation. There is no approve-item action. Clearly requested reversible edits may apply to drafts immediately with a visible diff and Undo. Batch actions validate and commit atomically or fail without partial changes. Undo is a new revision-checked action; it cannot silently overwrite later edits or change already published content.
-
-Persist request IDs and action IDs to avoid replay on reconnect or retried responses. Limit input length, context size, action count (initially 10) and provider attempts. Start with a separate configurable 100-chat-request daily allowance per owner. Reject requests over quota before inference. Keep chat history private, support clearing it, and never feed another owner's context to the model. Clearing history does not delete catalog data or the necessary private change audit.
-
-Release checks cover Japanese requests, price edits, opening hours, multi-step corrections, clarification, malicious photo instructions and refused unsupported actions. Until live conversational reliability is verified, retain direct forms and identify fixture-powered demonstrations. This focused compatibility testing does not require the deferred comparative benchmark.
-
-### Vision compatibility gate
-
-A proposed message uses `content` parts with `type: "text"` and `type: "image_url"`, the latter containing a base64 data URL. **This shape is a hypothesis, not confirmed AMD behavior.** Isolate serialization in the adapter and verify against provider guidance or one authorized image request. Prefer inline image bytes if supported; do not make originals public merely to satisfy an assumed URL requirement. If a temporary signed URL is necessary, document its lifetime and exposure.
-
-The first available consented image is enough for a compatibility smoke test; a benchmark dataset is not required. Until that test passes, use clearly labeled fixture responses for UI development and mark live extraction unverified. Never substitute fixtures silently after a production API failure.
+Until the gate passes, develop against clearly labeled fixtures and mark live extraction unverified. Never substitute fixtures silently after a production failure. If the gate fails, the team chooses and records a plan B model before switching.
 
 ### Extraction output
 
-Request JSON only, Japanese text, visible evidence only, and `null` for unreadable or absent values. Image text is untrusted data, not instructions. Do not infer allergens, health claims, brand, weight, price or tax status from general knowledge.
+Request JSON only, Japanese text, visible evidence only, `null` for unreadable or absent values. Do not infer allergens, health claims, brand, weight, price or tax status from general knowledge.
 
 ```json
 {
@@ -236,204 +267,283 @@ Request JSON only, Japanese text, visible evidence only, and `null` for unreadab
       "uncertainFields": ["priceJpy"]
     }
   ],
+  "productCountEstimate": 1,
   "warnings": []
 }
 ```
 
-Validate with a shared schema: bounded strings and arrays, no unknown writable fields, nonnegative integer or null price, tax enum `included | excluded | unknown`, maximum 20 candidates per image. Empty `items` is valid and means nothing confidently readable was found. Extracted names may be null if unreadable. Auto-create editable items from validated output; a missing required name is an inline validation issue that must be filled or the item removed before publication. Unknown prices remain publishable as null. Uncertainty flags are informational, not approval gates. Persist item currency as JPY in application code rather than trusting model output.
+- Validation: bounded strings and arrays, no unknown writable fields, nonnegative integer or `null` price, tax enum `included | excluded | unknown`.
+- **MVP mode `single`:** at most one item is created per image. If `productCountEstimate > 1`, create nothing and have the assistant ask the owner which product to add (or to crop/retake). Mode `shelf` (up to 20 items) is Phase 7.
+- Empty `items` is valid: nothing confidently readable. A null name becomes an inline validation issue that must be filled or the item removed before publication. Null prices are publishable.
+- Set `currency: "JPY"` in application code, never from model output.
+- Parsing: allow removal of one enclosing JSON code fence; otherwise parse strictly. Invalid JSON, truncation, schema failure, empty choices or unexpected shape are controlled failures. At most one explicit retry; never guess missing facts. Model self-reported confidence is not accuracy.
 
-Allow removal of one enclosing JSON code fence; otherwise parse strictly. Reject invalid JSON, truncated completion, invalid schema, empty choices or unexpected content shape as controlled failures. Do not “repair” results by guessing missing facts. Optional one explicit retry is allowed; no unbounded repair loop. Model self-reported confidence is not calibrated accuracy.
+### Extraction jobs and retries
 
-### Jobs and retries
+- An image attached in chat or uploaded via the catalog calls `POST /api/shops/:id/extractions`, which creates the job and returns 202.
+- Idempotency key: owner + shop + image content hash + prompt version + intent. Duplicate submissions return the same job.
+- A Firestore-triggered worker claims a transaction-protected lease, calls AMD, then in one transaction writes provenance and the item (deterministic ID from job ID), increments `contentRevision` and completes the job. A redelivered or stale worker cannot recreate an item the owner has since edited or removed, nor overwrite a newer attempt.
+- Limits: one active extraction per owner; 20 provider attempts per owner per day (`usage` counter, checked and incremented transactionally before calling AMD); conservative worker max instances.
+- Retry only timeouts, 429 and transient 5xx with bounded backoff, jitter and `Retry-After`; maximum two provider attempts per job. Never retry authentication or malformed-request errors. Disable automatic trigger retries so they cannot create uncontrolled provider calls. A lost response may still be billable.
+- A scheduled function fails expired leases after a grace period. A user retry creates a linked job and counts against quota.
+- Allowlisted logs: job ID, requested/returned model, prompt version, latency, sanitized error class, token counts, optional provider request ID.
 
-`queued → running → succeeded | failed`; validated extraction results automatically create saved unpublished catalog items and display editable cards in chat. No accept/reject queue or manual adoption step intervenes. Allocate idempotency keys per user/shop/image generation/prompt version and request intent. Duplicate client submissions return the same job. A Firestore-triggered worker claims a transaction-protected lease and writes internal provenance and catalog items with deterministic IDs, increments the shop revision and completes the job in one transaction. Retried delivery cannot recreate an item the owner has since edited or removed; use job completion/provenance records for deduplication. A stale worker cannot overwrite a newer attempt.
+### Conversational action planning
 
-Start with one active extraction per owner, a configurable 20-request daily allowance, and conservative worker instance limits. Count attempts that reach the provider. Retry only timeouts, 429 and transient 5xx with bounded backoff, jitter and `Retry-After` where supplied; maximum two provider attempts per job. Do not retry authentication or malformed-request errors blindly. A lost response may still be billable; application idempotency does not guarantee provider exactly-once billing.
+The chat worker sends the current shop facts and only relevant recent context, and expects a bounded JSON proposal: `message`, `actions[]` (≤ 10) and optional `clarification`. Each action has an allowlisted `type`, target ID, expected revision and typed arguments. Native tool calling and JSON mode are not assumed. Use few-shot Japanese examples in the versioned prompt.
 
-Use a scheduled recovery function to fail expired leases after a documented grace period; an explicit user retry creates a linked job and counts against quota. Configure trigger retries deliberately so they cannot create uncontrolled provider calls. Allowlist operational logs: job ID, requested/returned model, prompt version, latency, sanitized error class, token counts and optional provider request ID.
+| Action type | Applies | Undo |
+|---|---|---|
+| `updateProfile`, `updateItem`, `setThemeTokens`, `reorderItems` | Automatically when clearly requested; shows field diff | Yes |
+| `createItem` | Automatically | Yes (removes it) |
+| `removeItem`, any batch touching more than 3 items | Proposed; owner taps 適用 (`/actions/:id/apply`) | Yes |
+| `requestPreview` | Automatically | — |
+| `offerPublish` | Shows the publish prompt only; publishing still requires confirmation | — |
 
-## 7. Application API and merchant behavior
+- Unknown action types, unknown or cross-shop targets and malformed JSON produce no mutation. Ambiguous references ("これを変えて") require selection or clarification.
+- Batches validate and commit atomically. Undo is a revision-checked inverse action; it cannot overwrite later edits or change published content.
+- **Deterministic shortcuts:** UI chips (e.g. 価格を変更, 営業時間, テーマ) and forms call the same commands without the model. The model handles only free text.
+- Persist request and action IDs to prevent replay. Bound input length and context size. Default 100 chat requests per owner per day, rejected before inference when exceeded.
+- Chat history is private and clearable; clearing it keeps catalog data and the change audit. Never send another owner's context to the model.
+- Release checks: Japanese price edits, opening hours, multi-step corrections, clarification, malicious instructions in photos and refused unsupported actions. Until verified live, identify fixture-powered demonstrations.
 
-Use same-origin JSON HTTP APIs under `/api`, Firebase bearer tokens, server-side validation and a consistent `{error: {code, message, retryable}}` envelope. Set request size limits. Cross-origin access, if required for local development, uses an explicit allowlist. [Firebase HTTP Functions](https://firebase.google.com/docs/functions/http-events)
+## 9. Application API and merchant behavior
+
+Same-origin JSON APIs under `/api` with Firebase bearer tokens, App Check, server-side validation, request size limits and the error envelope `{error: {code, message, retryable}}`. Cross-origin access, if needed for local development, uses an explicit allowlist. [Firebase HTTP Functions](https://firebase.google.com/docs/functions/http-events)
 
 | Command | Behavior |
 |---|---|
-| `POST /api/shops` | Validate profile and reserve slug transactionally |
-| `PATCH /api/shops/:id` | Owner-only profile update with expected revision |
+| `POST /api/shops` | Validate profile, reserve random slug transactionally |
+| `PATCH /api/shops/:id` | Profile update with expected `profileRevision`; slug change only while unlocked |
 | `POST /api/shops/:id/uploads` | Allocate image ID/path and limits; browser uploads privately |
-| `POST /api/shops/:id/extractions` | Validate completed upload, quota and idempotency; return 202 with job ID |
-| `POST /api/shops/:id/items` | Create a saved unpublished item; extraction uses the same validated data contract automatically |
-| `PATCH /api/shops/:id/items/:itemId` | Validate fields, reject stale revision with 409, invalidate outstanding publish confirmations |
-| `POST /api/shops/:id/prepare-publication` | Validate current saved data and return change summary, immutable snapshot hash and short-lived confirmation ID; no preview visit required |
-| `POST /api/shops/:id/publish` | Validate explicit confirmation and snapshot hash; enqueue static publication and return 202/job ID |
-| `POST /api/shops/:id/unpublish` | Confirm removal and enqueue idempotent complete-site removal release |
-| `POST /api/shops/:id/chat` | Persist message/attachments and enqueue bounded action planning; return request ID |
-| `POST /api/shops/:id/actions/:actionId/apply` | Apply authorized proposal once with revision checks; never accepts arbitrary model operations |
-| `POST /api/shops/:id/actions/:actionId/undo` | Apply validated inverse as a new draft revision |
-| `PATCH /api/shops/:id/theme` | Validate preset/tokens, save draft revision and refresh preview |
-| `POST /api/shops/:id/preview` | Return authenticated snapshot and hash for current revision; no public deployment |
-| `DELETE /api/shops/:id/items/:itemId` | Delete private draft only if public references are resolved; explain republish requirement |
+| `POST /api/shops/:id/extractions` | Validate processed upload, quota, idempotency; 202 with job ID |
+| `POST /api/shops/:id/items` | Create draft item (same contract as extraction) |
+| `PATCH /api/shops/:id/items/:itemId` | Validate fields; 409 on stale item revision |
+| `DELETE /api/shops/:id/items/:itemId` | Always allowed; removal appears in the next publish summary; live release unaffected until republished |
+| `PATCH /api/shops/:id/theme` | Validate template/tokens and contrast; save draft |
+| `POST /api/shops/:id/chat` | Persist message/attachments, create chat request; 202 with request ID |
+| `POST /api/shops/:id/actions/:actionId/apply` | Apply a proposed action once with revision checks |
+| `POST /api/shops/:id/actions/:actionId/undo` | Apply validated inverse as a new action |
+| `POST /api/shops/:id/preview` | Render current draft via the storefront renderer; return HTML |
+| `POST /api/shops/:id/prepare-publication` | 409 if extraction jobs are running; validate draft; return change summary, snapshot hash and confirmation ID |
+| `POST /api/shops/:id/publish` | Validate confirmation (unused, unexpired, same `contentRevision` and hash); in one transaction write the release, move the live pointer, lock slug; return live URL |
+| `POST /api/shops/:id/unpublish` | Delete the live pointer in a transaction; idempotent |
 
-The UI shows upload, processing, saved/unpublished changes, publishing, failure and published states explicitly. Provide manual entry when extraction fails. Show photo and editable fields together; flag unknown prices and uncertain text. The sole publication gate is a change-summary confirmation. Product cards are optional editing controls, never required review tasks. Disable duplicate submissions locally and also enforce idempotency on the server. Sign-out clears private subscriptions and cached merchant data.
+Publish and unpublish complete synchronously; there is no build or release job.
 
-Public routes: `/s/:slug` and `/s/:slug/p/:itemId`. Include Japanese language metadata, escaped content, canonical URL, title, description and Open Graph tags. Product details and shop contact information must be in the first HTML response. Publish only the saved data covered by the owner’s confirmation; do not emit stock availability or offers unless they represent real supported facts. Demo shops are visibly labeled and `noindex`; exclude them from the sitemap. Add a validated map link only when the merchant supplies it. LINE sharing is optional; copy-link and QR suffice for MVP.
+### Merchant UX
 
-### Conversational workspace and visual direction
+- Show upload, processing, saved-unpublished, publishing, failure and live states explicitly. Provide manual entry when extraction fails. Show photo and editable fields together; flag unknown prices and uncertain text.
+- After an edit batch, offer 「この変更を公開しますか？」 with a concise summary and 公開する / 編集を続ける; preview is optional. The summary compares against the live release: added, changed and removed products, profile fields, images and theme. First publication summarizes the whole storefront. Do not prompt on every keystroke.
+- Show the live URL and QR code only after publish succeeds; note that changes reach all visitors within about a minute.
+- Disable duplicate submissions locally; idempotency is enforced on the server. Sign-out clears private subscriptions and cached merchant data.
+- Label actions in Japanese; use `公開する`, never "deploy".
 
-Use a polished modern interface with calm neutral surfaces, clear Japanese typography, generous spacing and product photography as the main visual content. Desktop has shop/catalog navigation, a central conversation and a resizable storefront preview. Mobile has Chat, Catalog and Preview tabs with a persistent publication status/action. Keep the owner workspace styling stable even when the storefront theme changes.
+### Public pages
 
-Messages can contain upload thumbnails, progress, editable product cards, field-level diffs, theme choices and action buttons. Users can manage every required field through forms as well as chat. Keep processing status visible without requiring token streaming. Announce asynchronous results accessibly, preserve focus while cards update and respect reduced motion. Label actions in Japanese; use `公開する` (Publish), not “deploy.”
+- Routes: `/s/:slug` and `/s/:slug/p/:itemId`. Include `lang="ja"`, escaped content, canonical URL, title, description and Open Graph tags. Product details and shop contact information are in the first HTML response.
+- Do not emit stock availability or offers unless they are real supported facts. Demo shops are visibly labeled and `noindex`, and excluded from the sitemap. Add a map link only when the merchant supplies a validated one. Copy-link and QR suffice; LINE sharing is Later.
 
-After a completed edit batch, offer “この変更を公開しますか？” with a concise summary and Publish / Keep editing actions; Preview is optional. Summarize added, changed and removed products, profile fields, images and theme against the last live version. First publication summarizes the whole storefront. One confirmation publishes all valid saved items; there is no mandatory preview, review screen or item-by-item approval. Do not interrupt every keystroke with a confirmation. Bind the confirmation to the exact saved revision and snapshot hash. Concurrent edits or completed extraction jobs invalidate it and require a refreshed summary. If jobs are still running, wait for completion or cancellation before preparing the summary; never publish a misleading partial photo upload. Provide retry for failed builds and a live URL/QR only after a verified release.
+### Workspace visual direction
 
-### Curated AI-customized storefront themes
+Calm neutral surfaces, clear Japanese typography, generous spacing, product photography as the main visual content. Desktop: shop/catalog navigation, central conversation, resizable preview. Mobile: チャット, カタログ and プレビュー tabs with a persistent publication status/action. The workspace style stays stable when the storefront theme changes.
 
-Ship three professionally designed templates: **Natural** (ivory/clay, spacious photography for crafts), **Botanical** (cream/green, soft imagery for tea or flowers), and **Modern** (crisp neutrals, strong typography for specialty retail). These are starting points, not assumptions about a shop's identity.
+Messages can contain upload thumbnails, progress, editable product cards, field diffs, theme choices and action buttons. Processing status is visible without token streaming. Announce asynchronous results accessibly, preserve focus while cards update and respect reduced motion.
 
-Generate a theme proposal from the merchant-confirmed category, shop description, brand preferences and optional logo colors. Select a template and allowlisted tokens: background/surface/text/accent colors, Japanese-safe font preset, spacing density, corner treatment and image aspect/crop preference. Validate contrast and token ranges before saving. If supplied colors fail contrast, suggest an accessible variant. Do not invent logos or change product photo colors.
+### Curated storefront themes
 
-The owner can say “make it warmer” or choose a preset directly. Save exact tokens and template version; ordinary product edits and republishing must not regenerate the design. Theme changes are drafts until published. Plain text copy edits join the saved changes and the same publish summary; do not add a separate copy-review step or invent factual claims.
+| Template | Character | Tier |
+|---|---|---|
+| **Modern** | Crisp neutrals, strong typography; specialty retail | Must |
+| **Natural** | Ivory/clay, spacious photography; crafts | Should |
+| **Botanical** | Cream/green, soft imagery; tea or flowers | Should |
 
-Share CSS tokens, font assets and component/layout specifications between React preview and Astro. Verify parity at 360px, 768px and desktop widths using representative short/long Japanese names and missing images. Meet WCAG AA text contrast, visible keyboard focus, labeled fields and comfortable touch targets (aim for 44px). Avoid excessive animation, decorative gradients and crowded cards; provide clear hierarchy and consistent spacing. Static pages must remain usable without JavaScript.
+- A theme proposal uses the merchant-confirmed category, description, brand preferences and optional logo colors to choose a template and allowlisted tokens: background/surface/text/accent colors, font preset, spacing density, corner treatment, image aspect/crop.
+- Validate WCAG AA contrast and token ranges before saving; if supplied colors fail, suggest an accessible variant. Never invent logos or recolor product photos.
+- "もっと温かく" or a direct preset choice both work. Exact tokens and template version are saved; product edits and republishing never regenerate the design. Theme changes are drafts until published.
+- **Fonts:** default to system Japanese stacks (Hiragino Sans, Yu Gothic, Noto Sans JP where installed). An optional heading web font must be subset or `unicode-range`-split; budget ≤ 150 KB of font transfer per page.
+- Verify at 360px, 768px and desktop widths with short/long Japanese names and missing images. Visible keyboard focus, labeled fields, 44px touch targets, no horizontal overflow. Avoid excessive animation, decorative gradients and crowded cards.
 
-## 8. Phased implementation for coding agents
+## 10. Phased implementation
 
-Every phase must end with working demonstrable behavior, a brief status update, and evidence for its acceptance criteria. The tables above are the implementation contract. Tests using fixtures establish application behavior, not model quality.
+Every phase ends with working, demonstrable behavior, a brief status update in §12 and evidence for each acceptance ID. Fixture tests establish application behavior, not model quality.
 
-### Phase 0 — Foundation and decisions
+### Phase 0 — Foundation and live gates
 
 **Depends on:** none.
 
-**Instructions:** scaffold TypeScript React/Vite, Astro and Functions workspaces, shared schemas and Firebase emulator configuration. Record runtime/package versions, project aliases and region decisions. Add `.env.example`, secret exclusions, CI build/typecheck and this specification. Add a Japanese chat/preview shell, three theme contracts and an Astro sample build. Document the Cloud Build runner and deployment identity requirements; do not introduce Next.js API routes.
+**Instructions:** scaffold TypeScript workspaces (React/Vite, Astro storefront, Functions, `packages/*`), Zod contracts and Firebase emulator configuration. Record runtime/package versions, project aliases and regions. Add `.env.example`, secret exclusions, CI build/typecheck/lint. Add a Japanese chat/preview shell and the Modern theme contract. Run the live gates below and record results in §12.
 
-**Acceptance:** clean install/build/typecheck succeeds; emulators start with documented commands; merchant deep links load; an Astro fixture produces static HTML; preview/template contracts are versioned; no secret in built assets; README identifies confirmed facts and pending vision compatibility.
+**Acceptance:**
+- P0-1 Clean install, build and typecheck succeed; emulators start with documented commands.
+- P0-2 `/app/**` deep links load; an Astro SSR "hello" page renders through a Hosting → Function rewrite in the emulator and in the dev project.
+- P0-3 No secret appears in built client assets.
+- P0-4 AMD text request succeeds **from a deployed function in the chosen region**; latency recorded.
+- P0-5 Vision gate: one consented image request recorded as passed, failed or blocked, with evidence.
+- P0-6 Signed-URL generation works from the Functions service account.
 
 ### Phase 1 — Identity, shop profile and isolation
 
 **Depends on:** Phase 0.
 
-**Instructions:** implement Auth, profile creation/editing, unique slug reservation, owner-checked APIs, deny-by-default rules and owner-only reads. Implement revision checks before building later mutations.
+**Instructions:** Auth screens, shop creation/editing, random slug reservation, owner-checked APIs, deny-by-default rules, App Check, per-target revisions.
 
-**Acceptance:** owner A can create/reload a shop; owner B and anonymous users cannot read or change it; forged owner IDs and direct writes fail; concurrent duplicate slugs produce one winner; sign-in/reset/error states work on mobile.
+**Acceptance:**
+- P1-1 Owner A creates and reloads a shop; owner B and anonymous clients cannot read or change it.
+- P1-2 Forged owner IDs and direct client writes fail.
+- P1-3 Concurrent identical slug requests produce one winner.
+- P1-4 Sign-in, reset and error states work on a 360px screen.
 
-### Phase 2 — Private photo upload and AMD adapter
+### Phase 2 — Private upload and AMD adapter
 
 **Depends on:** Phase 1.
 
-**Instructions:** allocate private upload paths, validate/re-encode images, implement the adapter and prompt/schema versioning. Add a manual text connectivity check, separate from regular tests. Prepare fixture-based adapter tests. Perform one live image compatibility check when an authorized image becomes available; do not start a comparative evaluation project.
+**Instructions:** client resize, upload allocation, server validation/re-encoding, cross-border notice, adapter and prompt/schema versioning, fixture adapter tests. A manual connectivity script stays outside regular tests.
 
-**Acceptance:** valid images preview privately; unsupported/oversized/corrupt images fail safely; cross-owner image access fails; text adapter reads the supplied response shape including prefixed model identity; timeouts, non-JSON and malformed responses are controlled errors. Record image test as passed or pending with evidence. Pending image verification does not block subsequent fixture-backed UI development, but blocks an AI-complete release claim.
+**Acceptance:**
+- P2-1 Valid images preview privately; unsupported, oversized and corrupt images fail with Japanese guidance.
+- P2-2 Cross-owner image access fails; renditions have no EXIF/GPS.
+- P2-3 Adapter parses the supplied response shape including the prefixed model identity.
+- P2-4 Timeouts, non-JSON, fenced JSON, truncated and schema-invalid responses produce controlled errors.
 
-### Phase 3 — Conversational management and automatic catalog updates
+### Phase 3 — Extraction jobs and automatic catalog
 
-**Depends on:** Phase 2 application contracts; live vision verification may remain pending during development.
+**Depends on:** Phase 2 contracts (live vision may be pending).
 
-**Instructions:** implement job creation, quotas, transaction leases, bounded retries and recovery. Subscribe to job state in the merchant UI. Save validated extraction results directly as unpublished catalog items and show them in chat immediately. Retain internal provenance only. Implement optional manual editing/removal without candidate adoption, review queues or approval buttons. Add private conversation persistence, structured chat actions, field diffs, clarification, revision-checked Undo and direct-form alternatives. Add theme proposals and a private live preview.
+**Instructions:** job creation, quotas, leases, bounded retries, recovery, single-mode item creation, job-state subscription, catalog with form editing/removal/reorder.
 
-**Acceptance:** duplicate requests do not create duplicate catalog items; competing workers cannot both finalize a job; expired leases become actionable failures; quotas hold under concurrent requests; uploaded photos produce saved items without a review step; nothing is published automatically; reload preserves saved items and job state; a failed extraction supports manual entry. Japanese chat can change a price, shop hours and theme; ambiguous requests ask for clarification; replayed or cross-owner actions fail; Undo cannot overwrite newer edits; extracted text cannot trigger commands; preview updates only after a successful save. Run live extraction and conversational action checks before claiming AI completeness.
+**Acceptance:**
+- P3-1 An uploaded photo produces a saved, unpublished, editable item with no review step.
+- P3-2 Duplicate requests do not create duplicate items; competing workers cannot both finalize a job.
+- P3-3 Expired leases become actionable failures; quotas hold under concurrent requests.
+- P3-4 A multi-product photo creates no item and asks which product to add.
+- P3-5 A failed extraction supports manual entry; reload preserves items and job state.
+- P3-6 Editing item A while an extraction completes for item B does not return 409.
 
-### Phase 4 — Publish confirmation, Astro builds and static publishing
+### Phase 4 — Conversational management, themes and preview
 
 **Depends on:** Phase 3.
 
-**Instructions:** build the single change-summary confirmation, revision-bound publication snapshots and unpublish. Optional editing/preview must not introduce another required step. Build Astro catalog/product HTML and selected media from immutable snapshots. Implement the background runner, full-site manifest assembly, serialized Hosting release, reconciliation and removal releases. Require explicit publication confirmation tied to the publication snapshot hash. Enforce item/document bounds and safe escaping.
+**Instructions:** chat persistence, chat-request worker, action allowlist and apply policy, field diffs, clarification, Undo, UI shortcut chips, theme proposals and token validation, server-rendered draft preview in a sandboxed iframe.
 
-**Acceptance:** a merchant can upload a photo and confirm publication without visiting a review/preview screen or approving any item; initial public HTML contains the confirmed data with JavaScript disabled; draft edits remain private; stale publish confirmations fail safely and show a refreshed summary; concurrent edits return 409; after a verified removal release, unpublished pages/media return 404; unknown routes return 404; public responses reveal no source paths, user IDs or raw AI metadata; malicious strings cannot execute HTML or script; a failed build preserves the old site; publishing shop A preserves shop B and the owner application; simultaneous publishes and an unpublish cannot lose or resurrect content; recovery reconciles a crash after Hosting release; one-shop rollback preserves other shops.
+**Acceptance:**
+- P4-1 Japanese chat changes a price, shop hours and theme; ambiguous requests ask for clarification.
+- P4-2 Replayed and cross-owner actions fail; text in a photo cannot trigger an action.
+- P4-3 Undo cannot overwrite newer edits.
+- P4-4 Preview reflects the saved draft only after a successful save, and matches the public renderer by construction.
+- P4-5 Every required field is editable through forms without chat.
 
-**Milestone:** a complete functional MVP. It is AI-complete only after real image extraction and conversational action checks pass.
+### Phase 5 — Publish, public storefront and sharing
 
-### Phase 5 — Modern UI, theme polish and sharing
+**Depends on:** Phase 4 (Phase 3 suffices for a forms-only demo).
 
-**Depends on:** Phase 4.
+**Instructions:** change summary, confirmations, publish/unpublish transactions, storefront routes, media route, metadata, caching and security headers, sitemap, copy-link and QR.
 
-**Instructions:** add canonical metadata, sitemap, copy-link and QR, accessible responsive public pages, optional merchant-confirmed map link. Polish all three templates and chat/cards/preview layouts. Test preview-to-Astro visual parity, long Japanese text and missing images. Keep demo content visibly distinct. Add lightweight performance measurement.
+**Acceptance:**
+- P5-1 A merchant uploads a photo and publishes with one confirmation, without visiting preview or approving any item.
+- P5-2 Initial HTML contains the confirmed data with JavaScript disabled; draft edits stay private.
+- P5-3 Stale or reused confirmations fail and show a refreshed summary; prepare fails while extraction jobs run.
+- P5-4 After unpublish, pages and media return 404 at the origin immediately and at the edge within the TTL; unknown routes return 404.
+- P5-5 Public responses reveal no source paths, user IDs or raw AI metadata; malicious strings cannot execute HTML or script; CSP header present.
+- P5-6 Publishing or unpublishing shop A does not affect shop B.
+- P5-7 Media not referenced by the live release returns 404.
+- P5-8 QR opens the correct catalog on a phone; sitemap lists only live non-demo catalogs.
 
-**Acceptance:** QR opens the correct production catalog on a phone; metadata appears in raw HTML; sitemap includes only active non-demo catalogs; all actions work by keyboard; labels and focus states are present; 360px-wide screens have no horizontal overflow; errors explain the next action in Japanese; all three themes pass contrast and responsive checks; saved themes remain stable across product-only republishes; owners can finish the workflow using either chat cards or forms.
+**Milestone:** complete functional MVP. It is AI-complete only after live extraction and conversational checks pass.
 
-### Phase 6 — Release verification and demo
+### Phase 6 — Polish, release verification and demo
 
-**Depends on:** Phases 0–5, live image compatibility and conversational action verification.
+**Depends on:** Phases 0–5, live vision and conversational verification.
 
-**Instructions:** run targeted unit tests, emulator authorization/concurrency tests and a browser test covering login → describe shop in chat → upload → edit product → optionally choose theme or preview → confirm change summary and publish → verify static release → unpublish. Deploy to staging, verify the complete live flow, document environment setup, secret binding, rollback and cleanup. Production deployment is a separate operational action from this documentation task.
+**Instructions:** polish remaining themes and layouts; lightweight performance measurement; targeted unit tests, emulator authorization/concurrency tests and one browser test: login → describe shop in chat → upload → edit product → optionally theme/preview → confirm and publish → verify public page → unpublish. Deploy to staging and verify the live flow. Document environment setup, secret binding, rollback (moving the live pointer to a previous release via an admin script) and cleanup. Production deployment is a separate operational action.
 
-**Acceptance:** real AMD extraction succeeds on an authorized image and is distinguishable from fixtures; owner isolation and public HTML tests pass; secrets are absent from client assets/logs; errors and quota limits are demonstrated; verified unpublish removes released files; multi-shop publication and release recovery checks pass; staging/production data are separated; rollback procedure is documented. Prepare a short demo showing real inference plus merchant corrections without claiming benchmark accuracy. If credentials/images are unavailable, report those checks as blocked, never passed.
+**Acceptance:**
+- P6-1 Real AMD extraction succeeds on an authorized image and is distinguishable from fixtures.
+- P6-2 Owner isolation and public HTML tests pass; secrets are absent from client assets and logs.
+- P6-3 Errors and quota limits are demonstrated with Japanese next-step messages.
+- P6-4 All actions work by keyboard; shipped themes pass contrast and 360px checks; saved themes stay stable across product-only republishes.
+- P6-5 Staging and production data are separated; rollback procedure is documented.
+- P6-6 A short demo shows real inference plus merchant corrections without benchmark claims. Missing credentials or images are reported as blocked, never passed.
 
 ### Phase 7 — Optional scope expansion
 
-**Depends on:** release-ready MVP.
+**Depends on:** release-ready MVP. Skip if it threatens core readiness.
 
-**Instructions:** add multi-item shelf extraction first, then menu extraction and optional LINE sharing. Reuse the same automatic-save and single publish-confirmation contracts. Display source-image crops and item-price associations as editable fields without per-item approval. Introduce no automatic product matching based solely on model guesses.
+**Instructions:** extraction mode `shelf` (up to 20 items, source-image crops), then menu extraction and optional LINE sharing, reusing the automatic-save and single-confirmation contracts. No automatic product matching based solely on model guesses.
 
-**Acceptance:** merchant can remove duplicate items, correct item/price pairing and change images, then publish all changes with one confirmation; existing single-product workflow remains intact. Skip this phase if it threatens core release readiness.
+**Acceptance:** P7-1 The merchant removes duplicates, corrects item/price pairing and changes images, then publishes with one confirmation; the single-product workflow remains intact.
 
-### Standalone workstream E — Deferred model evaluation
+### Workstream E — Deferred model evaluation
 
-**Depends on:** stable adapter, consented images and manually labeled ground truth. Not a prerequisite for building or releasing the MVP after its single-image compatibility check.
+**Depends on:** stable adapter, consented images and manually labeled ground truth. Not a prerequisite for the MVP.
 
-**Instructions:** implement `scripts/evaluate-models.ts` as an explicitly invoked local CLI importing the same server-only adapter, prompts and schemas. It must not require Firebase, create catalog records, run in deployment, or be part of normal CI. It is a future implementation deliverable; this specification does not claim the script already exists.
-
-Proposed interface:
+**Instructions:** implement `scripts/evaluate-models.ts` as an explicitly invoked local CLI importing the same adapter, prompts and schemas. It must not require Firebase, create catalog records, run in deployment or run in normal CI.
 
 ```bash
 npm run evaluate:models -- --manifest evaluation/manifest.json \
   --models MiniCPM-V-4.7-35B-A3B --out evaluation/results/run-001
 ```
 
-- Manifest specifies image paths, task mode, ground-truth path and dataset version. Reject missing files before any paid call. No images means a clear “evaluation not run” result, never a zero-accuracy report.
-- API key comes from the environment. Allow endpoint/model overrides explicitly. Other model names are user-supplied candidates, not assumed available or vision-capable.
-- Default concurrency 1; support a maximum request count, timeout, dry run, resume and configurable repeats. Resume identity includes image hash, model, prompt, schema and repetition index.
-- Record requested/returned model, dataset hash, prompt/schema version, request timestamp, latency, error category, retry count, token usage and optional reported cost. Save sanitized raw model content only locally with dataset consent; never store secrets or full provider metadata.
-- Report schema-valid response rate, failure rate, exact normalized name/price correctness, null-versus-invented-field errors, and latency median/p95 with sample counts. Normalize Japanese width/Unicode and surrounding whitespace without removing meaningful characters. Measure name and price separately.
-- For multi-item images, require reviewed prediction-to-ground-truth matching, or document a fixed deterministic matching rule before scoring precision/recall. Count false positives, misses and duplicate predictions. Do not use an unreviewed model judge as ground truth.
-- Missing ground truth permits operational metrics only; accuracy is “not measured.” Distinguish unsupported models from low accuracy. Report per-image results and aggregate JSON/CSV/Markdown with denominators and small-sample limitations.
-- Keep evaluation images and outputs ignored by default. Synthetic/fixture tests validate the runner, not real recognition quality.
+- Manifest lists image paths, task mode, ground-truth path and dataset version. Reject missing files before any paid call. No images yields "evaluation not run", never a zero-accuracy report.
+- API key from the environment; explicit endpoint/model overrides. Other model names are user-supplied candidates, not assumed available or vision-capable.
+- Default concurrency 1; maximum request count, timeout, dry run, resume and repeats. Resume identity: image hash, model, prompt, schema, repetition index.
+- Record requested/returned model, dataset hash, prompt/schema version, timestamp, latency, error category, retry count, token usage and optional reported cost. Sanitized raw output stays local with dataset consent; never store secrets or full provider metadata.
+- Report schema-valid rate, failure rate, exact normalized name and price correctness (measured separately), null-versus-invented-field errors, latency median/p95 with sample counts. Normalize Japanese width/Unicode and surrounding whitespace only.
+- Multi-item images need reviewed prediction-to-ground-truth matching or a documented deterministic rule before precision/recall; count false positives, misses and duplicates. No unreviewed model judge as ground truth.
+- Without ground truth, report operational metrics only ("accuracy not measured"). Distinguish unsupported models from low accuracy. Output per-image and aggregate JSON/CSV/Markdown with denominators and small-sample caveats.
 
-**Acceptance:** dry run performs zero network requests; absent dataset fails helpfully; fixtures verify scoring and resume behavior; one real dataset run produces traceable per-image and aggregate output when data is available. Model replacement requires reviewed evidence and a deliberate configuration change, never an automatic switch based on one sample.
+**Acceptance:** E-1 dry run makes zero network requests; E-2 absent dataset fails helpfully; E-3 fixtures verify scoring and resume; E-4 one real run produces traceable per-image and aggregate output when data exists. Model replacement requires reviewed evidence and a deliberate configuration change.
 
-## 9. Coding-agent operating instructions
+## 11. Coding-agent operating instructions
 
-1. Read this specification and current project status before editing. Work on the next incomplete phase and preserve existing user changes.
-2. Treat explicit requirements as binding and defaults as documented implementation choices. Record material departures and reasons before expanding scope.
-3. Keep AMD serialization, prompts and normalization in reusable server-only modules so the app and deferred evaluation script use identical contracts.
+1. Read this specification, `CLAUDE.md` and §12 before editing. Work on the next incomplete phase (respecting the demo-critical tiers) and preserve existing user changes.
+2. Treat §2 principles and explicit requirements as binding; defaults are documented choices. Record material departures and reasons in §12 before expanding scope.
+3. Keep AMD serialization, prompts and normalization in `packages/ai` so the app and the evaluation script share identical contracts.
 4. Use fixtures for fast deterministic tests. Never imply fixtures are live inference or include paid provider calls in ordinary tests.
-5. Enforce validation, owner authorization and expected revisions on the server even if the UI already checks them.
-6. Run checks relevant to the changed behavior; include negative authorization tests whenever access boundaries change.
-7. End each phase with changed behavior, files, checks run/results, remaining limitations and next phase. Update checkboxes and the decision log in this same document.
-8. Never mark a phase complete solely because code exists. Record unrun deployment, vision or browser checks explicitly.
-9. Use the documented background build runner for Astro publication. Do not add unrelated integrations or autonomous agent orchestration. AI proposes validated data/actions; trusted code controls writes and deployments.
-10. Keep chat, direct forms and public templates on the same contracts. Publication must require an owner-confirmed revision and never be triggered solely by model output.
+5. Run checks relevant to the change; include negative authorization tests whenever access boundaries change.
+6. End each phase with: changed behavior, files, checks run and results (by acceptance ID), remaining limitations and next phase. Update the checklist and decision log in §12.
+7. Never mark a phase complete because code exists. Record unrun deployment, vision or browser checks explicitly.
+8. Do not add unrelated integrations or autonomous agent orchestration.
 
 Suggested agent handoff:
 
-> Implement the next incomplete phase of Shelf2Kumo-Implementation-Specification.md. Read current code and status first. Use Firebase Auth, Firestore, Cloud Functions, Firebase Hosting and private Cloud Storage image assets. Build the React/Vite conversational workspace, curated AI-customized themes and Astro static publication pipeline. Follow the specified AMD endpoint/model, save validated extraction results directly to unpublished catalog data and require only one change-summary confirmation before publishing; do not add review queues or per-item approval, and keep model evaluation standalone. Deliver working behavior with phase acceptance evidence. Update the specification/status with decisions, verification results and remaining blockers.
+> Implement the next incomplete phase of docs/Shelf2Kumo-Implementation-Specification.md. Read CLAUDE.md, the spec's §2 principles and §12 status first. Deliver working behavior with evidence for each acceptance ID, and update §12 with decisions, verification results and remaining blockers.
 
-## 10. Progress and decision log
+## 12. Progress and decision log
 
-- [x] Editable implementation specification created.
-- [x] Firebase architecture and frontend alternatives documented.
+- [x] Implementation specification created (v1.3) and revised (v1.4).
 - [x] AMD text-request evidence incorporated; image support explicitly unverified.
-- [ ] Phase 0: application foundation.
+- [ ] Phase 0: foundation and live gates.
+  - [ ] P0-4 AMD reachability from deployed region.
+  - [ ] P0-5 Vision compatibility gate.
 - [ ] Phase 1: identity and isolation.
-- [ ] Phase 2: uploads and adapter.
-- [ ] Live image compatibility gate.
-- [x] Conversational workspace, theme generation and Astro publication requirements incorporated.
+- [ ] Phase 2: private upload and adapter.
+- [ ] Phase 3: extraction jobs and automatic catalog.
+- [ ] Phase 4: conversational management, themes and preview.
 - [ ] Live conversational action verification.
-- [ ] Phase 3: conversational management and automatic catalog updates.
-- [ ] Phase 4: single publish confirmation, Astro builds and static publication.
-- [ ] Phase 5: modern UI, theme parity, sharing and polish.
-- [ ] Phase 6: release verification.
+- [ ] Phase 5: publish, public storefront and sharing.
+- [ ] Phase 6: polish, release verification and demo.
 - [ ] Phase 7: optional shelf/menu expansion.
-- [ ] Workstream E: standalone evaluation, deferred until dataset availability.
+- [ ] Workstream E: standalone evaluation (deferred until dataset availability).
 
 | Date | Decision | Reason / follow-up |
 |---|---|---|
 | 2026-10-15 | Replace earlier Supabase/Vercel design with Firebase services | Explicit user stack choice |
-| 2026-10-15 | Adopt React/Vite chat workspace plus Astro static storefronts | Owner-approved direction; supersedes version 1.1 public renderer |
-| 2026-10-15 | Add curated AI-customized themes and draft preview | Modern UI with stable, validated design tokens |
-| 2026-10-15 | Require confirmed publication and background complete-site releases | Prevent accidental publication, lost shop files and stale build overwrites |
-| 2026-10-15 | Remove separate review/adoption and per-item approval steps (v1.3) | User requested automatic saved catalog updates with one change-summary confirmation before publishing |
-| 2026-10-15 | Add private Cloud Storage assets | Required persistence for product photographs |
-| 2026-10-15 | Default to MiniCPM-V-4.7-35B-A3B at supplied AMD endpoint | Successful user-provided text request; image format remains a verification gate |
-| 2026-10-15 | Defer comparative evaluation to standalone script | No test image dataset yet; evaluation must not delay application construction |
+| 2026-10-15 | React/Vite workspace plus Astro storefront | Owner-approved direction |
+| 2026-10-15 | Curated AI-customized themes and draft preview | Modern UI with stable, validated tokens |
+| 2026-10-15 | Remove review/adoption and per-item approval (v1.3) | Automatic saved catalog updates with one change-summary confirmation |
+| 2026-10-15 | Private Cloud Storage assets | Required persistence for product photographs |
+| 2026-10-15 | Default to MiniCPM-V-4.7-35B-A3B at the supplied AMD endpoint | Successful text request; image format is a gate |
+| 2026-10-15 | Defer comparative evaluation to a standalone script | No dataset yet; must not delay the application |
+| 2026-10-15 | **v1.4:** request-time Astro SSR from immutable snapshots replaces Cloud Build static releases | Removes Cloud Build, Hosting manifests, global lease, reconciliation and removal releases; v1.3 served HTML `no-store` anyway; publish/unpublish become single transactions |
+| 2026-10-15 | **v1.4:** preview rendered server-side by the storefront renderer | Parity by construction; no duplicated React theme components |
+| 2026-10-15 | **v1.4:** per-target revisions; shop `contentRevision` binds publish only | Background extraction no longer causes 409 on unrelated edits |
+| 2026-10-15 | **v1.4:** MVP extraction creates at most one item per image | Consistent with deferring shelf recognition |
+| 2026-10-15 | **v1.4:** vision gate and region reachability moved to Phase 0 | They decide whether the core product works |
+| 2026-10-15 | **v1.4:** random editable slug, locked at first publish | ASCII slugs are awkward for Japanese names |
+| 2026-10-15 | **v1.4:** App Check, CSP, client-side resize, font budget, quota counters | Protect paid quota; mobile performance; missing data model |
+| 2026-10-15 | **v1.4:** demo-critical tiers (Must/Should/Later) | Hackathon time budget |
+| — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
+| — | Plan B vision model | **Open:** choose only if the vision gate fails |
 
-Implementation-time checks: actual Firebase project IDs/regions and billing prerequisites; current supported Node runtime; secret provisioning; first consented test image and accepted multimodal payload; retention settings; production domain; build runner identity/billing; Hosting release reconciliation and cache behavior; live chat-action compatibility; event submission requirements. None of these unknowns justify fabricated defaults or claims of completed deployment.
+Implementation-time checks: Firebase project IDs, regions and billing; supported Node runtime; secret provisioning; App Check site key; consented test image and accepted multimodal payload; Astro SSR packaging in Functions; signed-URL IAM permission; production domain; cache TTL behavior on Hosting; live chat-action compatibility; event submission requirements. None of these unknowns justify fabricated defaults or claims of completed deployment.

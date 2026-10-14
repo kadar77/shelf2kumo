@@ -135,7 +135,7 @@ Visitor → Hosting CDN → Function "storefront" (renderToStaticMarkup, all sho
 
 ### Storefront renderer
 
-- One app, two Vite builds: the client build emits the workspace SPA and a fingerprinted storefront stylesheet to Hosting; `vite build --ssr src/storefront/server.tsx` emits a Node module exporting `renderPage(route, snapshot) → {status, html, headers}`. The `storefront` HTTP function bundles that module and handles all shops; it contains no per-shop code. **Verify bundling into Functions in Phase 0.**
+- One app, one Vite client build plus a server bundle: the client build emits the workspace SPA and a fingerprinted storefront stylesheet to Hosting. `functions/build.mjs` uses esbuild to bundle `apps/web/src/storefront/server.tsx` (`matchStorefrontPath`, `renderStorefront(route, snapshot) → {status, html, headers}`) with the function code into `functions/deploy/`, injecting the stylesheet path from the Vite manifest. The `storefront` HTTP function handles all shops; it contains no per-shop code. Verified in the emulator in Phase 0.
 - Pages render with `renderToStaticMarkup`: no hydration and no client JavaScript. The HTML links the storefront stylesheet by its fingerprinted path (read from the Vite manifest at build time) and inlines only the shop's theme tokens as CSS custom properties.
 - Storefront components live in `apps/web/src/storefront/` and are pure: props in, markup out. They must not import Firebase, workspace state or browser-only APIs, so the same components render on the server and inside the workspace preview.
 - Templates are trusted repository code. AI supplies only validated data and theme tokens; never shell commands, dependencies, JavaScript, raw HTML, arbitrary CSS or configuration.
@@ -525,9 +525,13 @@ Suggested agent handoff:
 
 - [x] Implementation specification created (v1.3) and revised (v1.4, v1.5).
 - [x] AMD text-request evidence incorporated; image support explicitly unverified.
-- [ ] Phase 0: foundation and live gates.
-  - [ ] P0-4 AMD reachability from deployed region.
-  - [ ] P0-5 Vision compatibility gate.
+- [ ] Phase 0: foundation and live gates (local scope complete; cloud checks blocked).
+  - [x] P0-1 Clean install, build, typecheck, lint and 46 tests pass; Functions + Hosting emulators start. *Partial:* Firestore/Storage emulators blocked (Java not installed locally).
+  - [x] P0-2 Emulator: `/app/**` deep links load; `/s/demo` fixture renders via Hosting → `storefront` rewrite with fingerprinted CSS, cache and CSP headers; 404s correct; no horizontal overflow at 360px (storefront, product, workspace). *Blocked:* dev Firebase project not created.
+  - [x] P0-3 `pnpm check:secrets` passed on `apps/web/dist`, including a scan for the actual `AMD_API_KEY` value.
+  - [ ] P0-4 *Local pass:* MiniCPM-V text request from a laptop, 2026-10-14T17:54:47Z, 1,016 ms, `finish_reason: stop`, returned model `self-dploy/MiniCPM-V-4.7-35B-A3B`, Japanese reply. *Blocked:* request from a deployed function in `asia-northeast1` (no Firebase project yet).
+  - [ ] P0-5 Vision compatibility gate. *Blocked:* no consented test image provided. Run `pnpm smoke:amd --image <path> --consented`.
+  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Blocked:* needs a Firebase project (or Java for the Storage emulator) and Phase 2 Storage rules.
 - [ ] Phase 1: identity and isolation.
 - [ ] Phase 2: private upload and adapter.
 - [ ] Phase 3: extraction jobs and automatic catalog.
@@ -559,7 +563,14 @@ Suggested agent handoff:
 | 2026-10-15 | **v1.5:** storefront rendered with `renderToStaticMarkup`, no hydration | Read-only pages need no client JS or SSR framework |
 | 2026-10-15 | **v1.5:** preview rendered client-side with shared components; supersedes v1.4 server-rendered preview | No preview endpoint, iframe or signed URLs; renditions via authenticated `getBlob()` |
 | 2026-10-15 | **v1.5:** only the Modern theme is Must; Natural and Botanical are Should | Owner-confirmed priority |
+| 2026-10-15 | Phase 0: pnpm workspace; React 19.3, React Router 7.18, Vite 8.3, Zod 4.6, Vitest 5.0, firebase-functions 7.4, firebase-admin 14.5 | Latest stable at implementation time; React Router 7 chosen over 8 for a known, stable API |
+| 2026-10-15 | Phase 0: TypeScript 6.0.3, not 7.0 | typescript-eslint 8.71 supports TypeScript < 6.1 |
+| 2026-10-15 | Phase 0: Functions runtime `nodejs22` | firebase-admin 14 requires Node ≥ 22; confirm runtime support at first deploy |
+| 2026-10-15 | Phase 0: esbuild bundles the storefront renderer from source instead of `vite build --ssr` | Storefront components import no CSS or Vite-specific assets, so one bundler step suffices; output is a self-contained `functions/deploy/` |
+| 2026-10-15 | Phase 0: emulator storefront serves the labeled demo fixture when no Firestore emulator runs | Java is not installed locally; production always reads `publishedCatalogs` → releases |
+| 2026-10-15 | Phase 0: Hosting emulator on port 5050 | macOS reserves port 5000 for AirPlay |
+| 2026-10-15 | Observed: local shell sets `AMD_MODEL=DeepSeek-V4.1-Flash` (and an unused `AMD_BASE_URL`) | Overrides the spec default; P0-4 evidence was rerun with `AMD_MODEL=MiniCPM-V-4.7-35B-A3B`. **Open:** confirm whether DeepSeek is intended for chat planning |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 
-Implementation-time checks: Firebase project IDs, regions and billing; supported Node runtime; secret provisioning; App Check site key; consented test image and accepted multimodal payload; bundling the `apps/web` SSR build into Functions; Storage bucket CORS for `getBlob()`; production domain; cache TTL behavior on Hosting; live chat-action compatibility; event submission requirements. None of these unknowns justify fabricated defaults or claims of completed deployment.
+Implementation-time checks: Firebase project IDs, regions and billing; supported Node runtime; secret provisioning; App Check site key; consented test image and accepted multimodal payload; Storage bucket CORS for `getBlob()`; production domain; cache TTL behavior on Hosting; live chat-action compatibility; event submission requirements. None of these unknowns justify fabricated defaults or claims of completed deployment.

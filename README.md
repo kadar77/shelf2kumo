@@ -6,13 +6,14 @@ Shelf2Kumo helps small Japanese shops put their products online from a phone. Th
 
 ## Status
 
-Planning stage. No application code yet. The implementation baseline is [docs/Shelf2Kumo-Implementation-Specification.md](docs/Shelf2Kumo-Implementation-Specification.md); progress is tracked in its §12.
+Phase 0 (foundation) complete locally. The implementation baseline is [docs/Shelf2Kumo-Implementation-Specification.md](docs/Shelf2Kumo-Implementation-Specification.md); progress is tracked in its §12.
 
 | Item | Status |
 |---|---|
-| AMD text inference (`MiniCPM-V-4.7-35B-A3B`) | Confirmed with one manual request |
-| AMD image input | **Unverified**, Phase 0 gate |
-| Application, deployment | Not started |
+| AMD text inference (`MiniCPM-V-4.7-35B-A3B`) | Passed from a local machine (Japanese reply, ~1 s); not yet from the deployed region |
+| AMD image input | **Unverified**, blocked on a consented test image |
+| Workspace shell, storefront renderer, emulator routing | Working with labeled demo data |
+| Firebase project, deployment | Not created |
 
 ## Architecture at a glance
 
@@ -23,7 +24,16 @@ Planning stage. No application code yet. The implementation baseline is [docs/Sh
 
 ## Getting started
 
-Setup instructions will be added in Phase 0. Copy `.env.example` to `.env.local` for local scripts; never commit real keys.
+Requirements: Node ≥ 22.22, pnpm 10, Firebase CLI. Java 11+ only for the Auth/Firestore/Storage emulators.
+
+```bash
+pnpm install
+pnpm dev          # http://localhost:5173/ (landing) and /app/shops/demo (workspace)
+pnpm verify       # typecheck, lint, test, build, client secret scan
+pnpm emulators    # http://127.0.0.1:5050/s/demo (storefront via Hosting → Function rewrite)
+```
+
+Copy `.env.example` to `.env.local` for local scripts; never commit real keys. `pnpm smoke:amd` sends one paid request to the AMD endpoint to check connectivity.
 
 ## Contributing with coding agents
 

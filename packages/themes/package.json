@@ -1,0 +1,15 @@
+{
+  "name": "@shelf2kumo/themes",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shelf2kumo/contracts": "workspace:*"
+  }
+}

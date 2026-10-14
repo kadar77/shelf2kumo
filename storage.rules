@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Phase 0 baseline: deny everything. Phase 2 adds owner uploads to allocated paths and owner reads
+// of their own renditions (spec §6 Authorization). Storage is never publicly readable.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

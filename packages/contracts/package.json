@@ -1,0 +1,16 @@
+{
+  "name": "@shelf2kumo/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures": "./src/fixtures/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}

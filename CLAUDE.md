@@ -10,7 +10,9 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-No application code exists yet. Phase 0 (scaffolding and live gates) is next. Update this section and the "Commands" section as the project takes shape.
+Phase 0 scaffolding is done locally; its cloud checks (P0-2 dev project, P0-4 from region, P0-5 vision, P0-6) are blocked on a Firebase project and a consented test image. See spec §12. Phase 1 (identity, shop profile, isolation) is next.
+
+The workspace currently reads the labeled demo fixture (`apps/web/src/workspace/fixtures.ts`); real data arrives with Phases 1–3.
 
 ## Stack
 
@@ -25,7 +27,28 @@ No application code exists yet. Phase 0 (scaffolding and live gates) is next. Up
 
 ## Commands
 
-To be filled in during Phase 0 (install, dev, emulators, build, typecheck, lint, test). Do not guess commands that do not exist yet.
+pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
+
+| Command | What it does |
+|---|---|
+| `pnpm install` | Install all workspaces |
+| `pnpm dev` | Vite dev server for `apps/web` (landing `/`, workspace `/app/...`) |
+| `pnpm typecheck` · `pnpm lint` · `pnpm test` | TypeScript, ESLint, Vitest across all packages |
+| `pnpm build` | Vite client build, then esbuild bundle of all functions into `functions/deploy/` |
+| `pnpm check:secrets` | Scan `apps/web/dist` for AMD key/endpoint leaks (run after build) |
+| `pnpm verify` | All of the above in CI order |
+| `pnpm emulators` | Build, then Functions + Hosting emulators (Hosting at http://127.0.0.1:5050, demo project `demo-shelf2kumo`) |
+| `pnpm emulators:all` | Same plus Auth/Firestore/Storage emulators (requires Java) |
+| `pnpm smoke:amd [--image <path> --consented]` | ONE paid AMD request; manual only, never in tests |
+
+Single package: `pnpm --filter @shelf2kumo/web test`, etc.
+
+Layout notes:
+- Workspace packages export TypeScript source directly (no package build step); imports use explicit `.ts`/`.tsx` extensions.
+- `functions/deploy/` is generated (gitignored) and is the Functions source directory in `firebase.json`.
+- Storefront CSS must stay scoped under `.sf`; the workspace preview imports it.
+- Non-secret function params live in `functions/.env.<projectId>` (copied into `deploy/` at build).
+- The local shell may export `AMD_MODEL` (e.g. a non-vision model); pass `AMD_MODEL=MiniCPM-V-4.7-35B-A3B` explicitly when checking the spec model.
 
 ## Non-negotiable rules
 

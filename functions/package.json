@@ -1,0 +1,20 @@
+{
+  "name": "@shelf2kumo/functions",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "firebase-admin": "14.5.0",
+    "firebase-functions": "7.4.0"
+  },
+  "devDependencies": {
+    "@shelf2kumo/contracts": "workspace:*",
+    "@shelf2kumo/themes": "workspace:*",
+    "@shelf2kumo/web": "workspace:*",
+    "esbuild": "0.28.2"
+  }
+}

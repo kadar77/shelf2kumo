@@ -1,0 +1,68 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f7f5;
+  --text: #1c1c1a;
+  --muted: #5c5c57;
+  --accent: #1f4e5f;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, "Noto Sans JP", Meiryo, system-ui,
+    sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.landing {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 96px 16px 64px;
+}
+
+.landing-eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.landing h1 {
+  margin: 0 0 16px;
+  font-size: clamp(2rem, 6vw, 2.75rem);
+  line-height: 1.25;
+}
+
+.landing-lead {
+  margin: 0 0 32px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+
+.landing-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 24px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.landing-link {
+  color: var(--accent);
+}
+
+a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}

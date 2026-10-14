@@ -1,11 +1,11 @@
 # Shelf2Kumo — Implementation Specification
 
-Version: 1.4 · Updated: 2026-10-15 · Status: editable implementation baseline
+Version: 1.5 · Updated: 2026-10-15 · Status: editable implementation baseline
 
 Team: KumoForge  
 Tagline: From Shelf to Cloud, Powered by AI
 
-This document supersedes the earlier Next.js/Supabase/Vercel architecture and version 1.3 of this specification (see §12). Firebase services and the AMD endpoint/model are confirmed project choices; other defaults may be revised during discussion. No application, infrastructure, model benchmark or live API verification has been executed as part of writing this document.
+This document supersedes the earlier Next.js/Supabase/Vercel architecture and versions 1.3–1.4 of this specification (see §12). Firebase services and the AMD endpoint/model are confirmed project choices; other defaults may be revised during discussion. No application, infrastructure, model benchmark or live API verification has been executed as part of writing this document.
 
 ## 1. Product and scope
 
@@ -51,7 +51,7 @@ These apply everywhere; later sections do not repeat them.
 4. **Server enforces everything.** Every command verifies the Firebase ID token, ownership, schema and revision, regardless of UI checks. Never accept a body `ownerId` as authority.
 5. **Immutable releases.** Public pages render only from immutable, owner-confirmed release snapshots. Draft edits never leak to public pages.
 6. **Honest verification.** Fixtures are labeled as fixtures, unrun checks are reported as unrun or blocked, and no accuracy is claimed without measurement.
-7. **One contract.** Chat, forms, preview and public pages share the schemas in `packages/contracts` and the tokens in `packages/themes`. Schemas (Zod) are the source of truth; prose here describes intent.
+7. **One contract, one app.** A single React application serves the workspace and every shop's storefront. Chat, forms, preview and public pages share the schemas in `packages/contracts`, the tokens in `packages/themes` and the same storefront components. Schemas (Zod) are the source of truth; prose here describes intent.
 
 ## 3. Decisions and verification status
 
@@ -59,8 +59,8 @@ These apply everywhere; later sections do not repeat them.
 |---|---|---|
 | Firebase Auth, Firestore, Cloud Functions, Firebase Hosting | User-selected | Use throughout |
 | Cloud Storage for Firebase | Adopted | Image files; Firestore stores metadata only |
-| React + Vite + TypeScript | Adopted | Merchant workspace at `/app/**` |
-| Astro storefront, server-rendered on request | Adopted in v1.4 | `@astrojs/node` handler in a Cloud Function behind a Hosting rewrite, CDN-cached; replaces the v1.3 static build pipeline |
+| One React + Vite + TypeScript app (`apps/web`) | Adopted in v1.5 | Workspace SPA at `/app/**`; the same app's storefront components are server-rendered for all shops at `/s/**` |
+| Storefront rendered on request | Adopted in v1.4; Astro dropped in v1.5 | `react-dom/server` static rendering in a Cloud Function behind a Hosting rewrite, CDN-cached, zero client JS; replaces the v1.3 static build pipeline |
 | Region | Proposed: `asia-northeast1` (Tokyo) | Verify availability for Functions/Firestore/Storage in Phase 0 and record actual choices |
 | AMD endpoint | Confirmed by user-provided request | `https://developer.amd.com.cn/radeon/api/v1/chat/completions` |
 | AMD request model | Confirmed by sample | `MiniCPM-V-4.7-35B-A3B` |
@@ -81,19 +81,26 @@ The successful text response does not establish Japanese OCR quality, vision com
 
 | Option | Role | Reason |
 |---|---|---|
-| **React + Vite** | Merchant workspace (`/app/**`) | Best fit for chat, editable cards and preview controls; static SPA on Hosting, APIs in Functions |
-| **Astro (SSR, Node adapter)** | Public storefront (`/s/**`) and draft preview | Fast server-rendered HTML with zero client JS by default; the same renderer produces the private preview, guaranteeing parity |
-| Next.js | Not selected | Its server layer overlaps the Cloud Functions backend; full-stack Next.js on Firebase points to App Hosting, adding another platform |
+| **One React + Vite app** | Workspace (`/app/**`) and storefront for all shops (`/s/**`) | Best fit for chat, editable cards and preview; one component set renders the in-workspace preview (client) and the public pages (server). One build, one design system, one dependency tree |
+| Astro | Dropped in v1.5 | Chosen for per-shop static builds; once storefronts render on request, a second framework only duplicates the React components and doubles tooling |
+| Next.js / React Router framework mode | Not selected | Full SSR frameworks add routing, data loading and hydration the storefront does not need; full-stack Next.js on Firebase points to App Hosting, adding another platform |
 
 **Why request-time rendering instead of static builds (v1.4 change).** The v1.3 design required Cloud Build, a full-site Hosting manifest, a global release lease, crash reconciliation, removal releases and per-shop rollback assembly, while still serving public HTML as `no-store`, which discarded the CDN benefit. Rendering on request from immutable snapshots, cached at the Hosting CDN with a short `s-maxage`, keeps the same publication guarantees with far less machinery: publish and unpublish become single Firestore transactions, shops never interfere with each other, and publish-to-live time is bounded by the cache TTL instead of a build.
 
-Sources: [Vite static deployment](https://vite.dev/guide/static-deploy.html), [Astro Node adapter](https://docs.astro.build/en/guides/integrations-guide/node/), [Firebase Hosting with Cloud Functions](https://firebase.google.com/docs/hosting/functions), [Hosting cache behavior](https://firebase.google.com/docs/hosting/manage-cache), [Firebase Next.js guidance](https://firebase.google.com/docs/hosting/frameworks/nextjs). Reviewed 2026-10-15; recheck when implementing.
+**Why one app (v1.5 change).** Storefront pages are simple, read-only views of a snapshot. Plain `renderToStaticMarkup` of React components is enough: no hydration, no client router, no framework adapter. The workspace preview renders the exact same components with draft data, so preview/public parity holds by construction without a server round trip.
+
+Sources: [Vite static deployment](https://vite.dev/guide/static-deploy.html), [Vite SSR build](https://vite.dev/guide/ssr.html), [React `renderToStaticMarkup`](https://react.dev/reference/react-dom/server/renderToStaticMarkup), [Firebase Hosting with Cloud Functions](https://firebase.google.com/docs/hosting/functions), [Hosting cache behavior](https://firebase.google.com/docs/hosting/manage-cache), [Firebase Next.js guidance](https://firebase.google.com/docs/hosting/frameworks/nextjs). Reviewed 2026-10-15; recheck when implementing.
 
 ## 5. Architecture
 
 ```text
-Owner: React/Vite on Firebase Hosting + Firebase Auth + App Check
-  ├─ Chat, upload (client-resized), editable cards, catalog, preview iframe
+apps/web (one React/Vite app, two builds)
+  ├─ client build → Hosting: workspace SPA at /app/** (+ storefront CSS asset)
+  └─ SSR build    → bundled into Function "storefront": renders storefront components
+
+Owner: workspace + Firebase Auth + App Check
+  ├─ Chat, upload (client-resized), editable cards, catalog, live preview
+  │    (preview = storefront components rendered client-side with draft data)
   └─ /api/** → Function "api": verify token/App Check, validate, write
                  ├─ Firestore: shops, items, theme, conversations, actions, releases
                  ├─ Storage: private originals and renditions
@@ -102,7 +109,7 @@ Owner: React/Vite on Firebase Hosting + Firebase Auth + App Check
 Publish:  prepare-publication → change summary + snapshot hash + confirmation ID
           → owner confirms → one transaction: write immutable release, move live pointer
 
-Visitor → Hosting CDN → Function "storefront" (Astro SSR)
+Visitor → Hosting CDN → Function "storefront" (renderToStaticMarkup, all shops)
           reads publishedCatalogs/{slug} → shops/{shopId}/releases/{releaseId}
           → HTML / media with Cache-Control: public, s-maxage
 ```
@@ -116,19 +123,21 @@ Visitor → Hosting CDN → Function "storefront" (Astro SSR)
 
   | Response | `Cache-Control` (initial) |
   |---|---|
-  | Fingerprinted workspace assets | `public, max-age=31536000, immutable` |
+  | Fingerprinted assets (workspace bundle, storefront CSS) | `public, max-age=31536000, immutable` |
   | Storefront HTML | `public, max-age=0, s-maxage=60` |
   | Published media | `public, max-age=300, s-maxage=300` |
   | Storefront 404 | `public, max-age=0, s-maxage=10` |
   | All `/api` responses | `private, no-store` |
 
   Publish and unpublish take effect immediately at the origin and at the edge within the TTL. Previously downloaded content cannot be recalled.
-- **Security headers:** storefront responses send a strict CSP (no inline script; `script-src 'self'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. The workspace starts with CSP in report-only mode until Firebase SDK origins are enumerated.
+- **Security headers:** storefront responses send a strict CSP (`script-src 'none'`; `style-src 'self'` plus a per-response hash or nonce for the inline theme-token block), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. The workspace starts with CSP in report-only mode until Firebase SDK origins are enumerated.
 - **App Check** (reCAPTCHA Enterprise provider) is enforced on `/api/**` to protect paid AMD quota; use debug tokens in emulators and development. [App Check](https://firebase.google.com/docs/app-check)
 
 ### Storefront renderer
 
-- Astro with `@astrojs/node` in middleware mode, wrapped by an HTTP `onRequest` function deployed as its own Functions codebase. **Verify packaging in Phase 0**; if it fails, deploy the same handler as a Cloud Run service and point the Hosting rewrite at it.
+- One app, two Vite builds: the client build emits the workspace SPA and a fingerprinted storefront stylesheet to Hosting; `vite build --ssr src/storefront/server.tsx` emits a Node module exporting `renderPage(route, snapshot) → {status, html, headers}`. The `storefront` HTTP function bundles that module and handles all shops; it contains no per-shop code. **Verify bundling into Functions in Phase 0.**
+- Pages render with `renderToStaticMarkup`: no hydration and no client JavaScript. The HTML links the storefront stylesheet by its fingerprinted path (read from the Vite manifest at build time) and inlines only the shop's theme tokens as CSS custom properties.
+- Storefront components live in `apps/web/src/storefront/` and are pure: props in, markup out. They must not import Firebase, workspace state or browser-only APIs, so the same components render on the server and inside the workspace preview.
 - Templates are trusted repository code. AI supplies only validated data and theme tokens; never shell commands, dependencies, JavaScript, raw HTML, arbitrary CSS or configuration.
 - The renderer reads only `publishedCatalogs/{slug}` and the referenced release snapshot. Escape all content; emit no source paths, user IDs or raw AI metadata.
 - `/media/{slug}/{contentHash}.jpg` streams a private rendition from Storage only if the live release references that hash; otherwise 404. Storage stays private.
@@ -137,13 +146,17 @@ Visitor → Hosting CDN → Function "storefront" (Astro SSR)
 
 ### Draft preview
 
-The workspace calls `POST /api/shops/:id/preview`; the server renders the current draft through the **same Astro renderer** and returns HTML that embeds 15-minute signed URLs for private renditions. The workspace displays it in a sandboxed `<iframe srcdoc>` (no `allow-scripts`, no `allow-same-origin`), refreshed after each successful save (debounced). Preview is never publicly deployed. Signed URLs require the Functions service account to sign blobs; verify the IAM permission in Phase 0.
+The workspace renders the **same storefront components** client-side from the owner's saved draft data (already subscribed via Firestore), using the shared `toStorefrontSnapshot()` mapping from `packages/contracts` that publishing also uses. Private renditions load through the Storage SDK's authenticated `getBlob()` as object URLs; never use `getDownloadURL()`, which creates durable public tokens. The preview updates after each successful save, sits inside a container that scopes the theme tokens so they do not leak into workspace styles, and is never publicly deployed. Configure bucket CORS for the workspace origin.
 
 ### Suggested repository structure
 
 ```text
-apps/web/                  React/Vite workspace and landing page
-apps/storefront/           Astro SSR templates, routes, metadata, function wrapper
+apps/web/                  The one React/Vite app
+  src/workspace/           Merchant SPA: chat, catalog, forms, preview pane
+  src/storefront/          Pure storefront components, routes, metadata
+  src/storefront/server.tsx  SSR entry used by the storefront function
+  src/landing/             Landing page
+functions/src/storefront/  HTTP function: resolve slug, load snapshot, call renderPage
 functions/src/api/         Authenticated HTTP commands
 functions/src/extraction/  Extraction worker, leases, validation
 functions/src/chat/        Action-planning worker and action execution
@@ -196,7 +209,7 @@ Use server timestamps and opaque IDs. Paths below are proposed contracts.
 - Firebase Auth email/password with Japanese sign-in/reset screens. **Should:** verified-email gate for extraction and publishing. **Later:** Google sign-in.
 - Firestore rules: owners may read only their own `shops/{shopId}` tree; all client writes denied. `slugReservations`, `publishedCatalogs`, `usage` and releases are server-only. Anonymous visitors receive rendered HTML only.
 - Admin SDK bypasses rules: every command verifies the ID token and shop ownership itself.
-- Storage rules: owners may upload once (no overwrite) to an allocated `owners/{uid}/shops/{shopId}/uploads/{imageId}` path with size and MIME limits; no client reads of other owners' paths, no listing, no public reads. Revalidate actual content server-side.
+- Storage rules: owners may upload once (no overwrite) to an allocated `owners/{uid}/shops/{shopId}/uploads/{imageId}` path with size and MIME limits. Owners may read (not write) their own `owners/{uid}/shops/{shopId}/renditions/{imageId}.jpg` for the preview; only the server writes renditions. No reads of other owners' paths, no listing, no public reads. Revalidate actual content server-side.
 - Test rules with two owners and an anonymous client. Authentication alone is not tenant isolation. [Firestore rules conditions](https://firebase.google.com/docs/firestore/security/rules-conditions)
 
 ### Images
@@ -324,12 +337,11 @@ Same-origin JSON APIs under `/api` with Firebase bearer tokens, App Check, serve
 | `POST /api/shops/:id/chat` | Persist message/attachments, create chat request; 202 with request ID |
 | `POST /api/shops/:id/actions/:actionId/apply` | Apply a proposed action once with revision checks |
 | `POST /api/shops/:id/actions/:actionId/undo` | Apply validated inverse as a new action |
-| `POST /api/shops/:id/preview` | Render current draft via the storefront renderer; return HTML |
 | `POST /api/shops/:id/prepare-publication` | 409 if extraction jobs are running; validate draft; return change summary, snapshot hash and confirmation ID |
 | `POST /api/shops/:id/publish` | Validate confirmation (unused, unexpired, same `contentRevision` and hash); in one transaction write the release, move the live pointer, lock slug; return live URL |
 | `POST /api/shops/:id/unpublish` | Delete the live pointer in a transaction; idempotent |
 
-Publish and unpublish complete synchronously; there is no build or release job.
+Publish and unpublish complete synchronously; there is no build or release job. There is no preview endpoint: the workspace renders the preview locally from draft data it already reads.
 
 ### Merchant UX
 
@@ -372,15 +384,15 @@ Every phase ends with working, demonstrable behavior, a brief status update in �
 
 **Depends on:** none.
 
-**Instructions:** scaffold TypeScript workspaces (React/Vite, Astro storefront, Functions, `packages/*`), Zod contracts and Firebase emulator configuration. Record runtime/package versions, project aliases and regions. Add `.env.example`, secret exclusions, CI build/typecheck/lint. Add a Japanese chat/preview shell and the Modern theme contract. Run the live gates below and record results in §12.
+**Instructions:** scaffold TypeScript workspaces (`apps/web` with client and SSR builds, Functions, `packages/*`), Zod contracts and Firebase emulator configuration. Record runtime/package versions, project aliases and regions. Add `.env.example`, secret exclusions, CI build/typecheck/lint. Add a Japanese chat/preview shell and the Modern theme contract. Run the live gates below and record results in §12.
 
 **Acceptance:**
 - P0-1 Clean install, build and typecheck succeed; emulators start with documented commands.
-- P0-2 `/app/**` deep links load; an Astro SSR "hello" page renders through a Hosting → Function rewrite in the emulator and in the dev project.
+- P0-2 `/app/**` deep links load; a fixture storefront page from `apps/web`'s SSR build renders through the Hosting → `storefront` function rewrite, with the fingerprinted stylesheet applied, in the emulator and in the dev project.
 - P0-3 No secret appears in built client assets.
 - P0-4 AMD text request succeeds **from a deployed function in the chosen region**; latency recorded.
 - P0-5 Vision gate: one consented image request recorded as passed, failed or blocked, with evidence.
-- P0-6 Signed-URL generation works from the Functions service account.
+- P0-6 The workspace loads an owner's private rendition via `getBlob()` (rules and bucket CORS configured); another owner cannot.
 
 ### Phase 1 — Identity, shop profile and isolation
 
@@ -424,13 +436,13 @@ Every phase ends with working, demonstrable behavior, a brief status update in �
 
 **Depends on:** Phase 3.
 
-**Instructions:** chat persistence, chat-request worker, action allowlist and apply policy, field diffs, clarification, Undo, UI shortcut chips, theme proposals and token validation, server-rendered draft preview in a sandboxed iframe.
+**Instructions:** chat persistence, chat-request worker, action allowlist and apply policy, field diffs, clarification, Undo, UI shortcut chips, theme proposals and token validation, client-side draft preview using the shared storefront components.
 
 **Acceptance:**
 - P4-1 Japanese chat changes a price, shop hours and theme; ambiguous requests ask for clarification.
 - P4-2 Replayed and cross-owner actions fail; text in a photo cannot trigger an action.
 - P4-3 Undo cannot overwrite newer edits.
-- P4-4 Preview reflects the saved draft only after a successful save, and matches the public renderer by construction.
+- P4-4 Preview reflects the saved draft only after a successful save; a snapshot test shows the preview and server-rendered markup are identical for the same snapshot; preview theme tokens do not alter workspace styles.
 - P4-5 Every required field is editable through forms without chat.
 
 ### Phase 5 — Publish, public storefront and sharing
@@ -511,7 +523,7 @@ Suggested agent handoff:
 
 ## 12. Progress and decision log
 
-- [x] Implementation specification created (v1.3) and revised (v1.4).
+- [x] Implementation specification created (v1.3) and revised (v1.4, v1.5).
 - [x] AMD text-request evidence incorporated; image support explicitly unverified.
 - [ ] Phase 0: foundation and live gates.
   - [ ] P0-4 AMD reachability from deployed region.
@@ -543,7 +555,11 @@ Suggested agent handoff:
 | 2026-10-15 | **v1.4:** random editable slug, locked at first publish | ASCII slugs are awkward for Japanese names |
 | 2026-10-15 | **v1.4:** App Check, CSP, client-side resize, font budget, quota counters | Protect paid quota; mobile performance; missing data model |
 | 2026-10-15 | **v1.4:** demo-critical tiers (Must/Should/Later) | Hackathon time budget |
+| 2026-10-15 | **v1.5:** drop Astro; one React/Vite app serves the workspace and all shops' storefronts | Request-time rendering removed Astro's static-build advantage; one component set, build and dependency tree |
+| 2026-10-15 | **v1.5:** storefront rendered with `renderToStaticMarkup`, no hydration | Read-only pages need no client JS or SSR framework |
+| 2026-10-15 | **v1.5:** preview rendered client-side with shared components; supersedes v1.4 server-rendered preview | No preview endpoint, iframe or signed URLs; renditions via authenticated `getBlob()` |
+| 2026-10-15 | **v1.5:** only the Modern theme is Must; Natural and Botanical are Should | Owner-confirmed priority |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 
-Implementation-time checks: Firebase project IDs, regions and billing; supported Node runtime; secret provisioning; App Check site key; consented test image and accepted multimodal payload; Astro SSR packaging in Functions; signed-URL IAM permission; production domain; cache TTL behavior on Hosting; live chat-action compatibility; event submission requirements. None of these unknowns justify fabricated defaults or claims of completed deployment.
+Implementation-time checks: Firebase project IDs, regions and billing; supported Node runtime; secret provisioning; App Check site key; consented test image and accepted multimodal payload; bundling the `apps/web` SSR build into Functions; Storage bucket CORS for `getBlob()`; production domain; cache TTL behavior on Hosting; live chat-action compatibility; event submission requirements. None of these unknowns justify fabricated defaults or claims of completed deployment.

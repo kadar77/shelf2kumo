@@ -16,8 +16,8 @@ Planning stage. No application code yet. The implementation baseline is [docs/Sh
 
 ## Architecture at a glance
 
-- **Merchant workspace:** React + Vite + TypeScript on Firebase Hosting (`/app`)
-- **Storefront:** Astro, server-rendered from immutable release snapshots in a Cloud Function, cached by the Hosting CDN (`/s/:slug`)
+- **One React + Vite + TypeScript app** for the merchant workspace (`/app`) and every shop's storefront (`/s/:slug`)
+- **Storefront:** the same React components, rendered to plain HTML in a Cloud Function from immutable release snapshots and cached by the Hosting CDN
 - **Backend:** Firebase Auth, Firestore, Cloud Functions, Cloud Storage, App Check
 - **AI:** AMD-hosted MiniCPM-V for product extraction and chat action planning
 

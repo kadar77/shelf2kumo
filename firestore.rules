@@ -1,9 +1,33 @@
 rules_version = '2';
 
-// Phase 0 baseline: deny everything. All application writes go through Cloud Functions (Admin SDK).
-// Phase 1 adds owner-only reads of shops/{shopId}/** (spec §6 Authorization).
+// Owners may READ their own shop tree; every client WRITE is denied. All mutations go through
+// authenticated Cloud Functions (Admin SDK), which enforce ownership and revisions themselves.
+// Server-only data: slugReservations, publishedCatalogs, usage, release snapshots, and anything
+// not matched below.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsShop(shopId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId == request.auth.uid;
+    }
+
+    match /shops/{shopId} {
+      // Single reads and list queries constrained by `where('ownerId', '==', uid)`.
+      allow read: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow write: if false;
+
+      // Owner-readable subcollections (items, theme, jobs, conversations, actions, ...).
+      // Release snapshots stay server-only.
+      match /{collection}/{rest=**} {
+        allow read: if collection != 'releases' && ownsShop(shopId);
+        allow write: if false;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

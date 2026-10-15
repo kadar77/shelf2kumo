@@ -10,9 +10,9 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phase 0 is done locally, including the vision gate (P0-5, synthetic image). Project `shelf2kumo` (alias `dev`) has Blaze, Firestore in `asia-northeast1` and a registered web app; the Storage bucket and Email/Password sign-in are still to be enabled in the console. Remaining cloud checks: P0-2 dev deploy, P0-4 from region, P0-6. See spec §12. Phase 1 (identity, shop profile, isolation) is next.
+Phases 0 and 1 are done and verified against emulators (Phase 1 not yet deployed to `dev`). Project `shelf2kumo` (alias `dev`) has Blaze, Firestore in `asia-northeast1`, a Storage bucket in `us-west1`, Email/Password sign-in and a registered web app. Remaining Phase 0 cloud checks: P0-2 dev deploy, P0-4 from region, P0-6. See spec §12. Phase 2 (private upload and AMD adapter) is next.
 
-The workspace currently reads the labeled demo fixture (`apps/web/src/workspace/fixtures.ts`); real data arrives with Phases 1–3.
+The workspace uses real Firebase Auth and Firestore. With `VITE_USE_EMULATORS=true` in `.env.local`, `pnpm dev` (Vite) and the Hosting emulator connect to the local emulators; run `pnpm emulators:all` alongside `pnpm dev`.
 
 ## Stack
 
@@ -40,6 +40,7 @@ pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
 | `pnpm emulators` | Build, then Functions + Hosting emulators (Hosting at http://127.0.0.1:5050, demo project `demo-shelf2kumo`) |
 | `pnpm emulators:all` | Same plus Auth/Firestore/Storage emulators (requires Java 11+; OpenJDK 21 via Homebrew is on PATH through `~/.zshrc`) |
 | `pnpm seed:emulator` | Publish the labeled demo shop into the running Firestore emulator (production storefront path) |
+| `pnpm test:emulator` | Build, then run `tests/` (rules + API suites) inside `firebase emulators:exec` (needs Java) |
 | `pnpm smoke:amd [--image <path> --consented] [--model <name>]` | ONE paid AMD request; manual only, never in tests |
 | `pnpm eval:images` | Render the synthetic evaluation images (needs local Chrome) into `evaluation/images/synthetic/` |
 

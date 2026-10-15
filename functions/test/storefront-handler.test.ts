@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleApiRequest } from '../src/api/handler.ts';
 import { handleStorefrontRequest } from '../src/storefront/handler.ts';
 import { fixtureSnapshotSource, shouldUseFixtures, type SnapshotSource } from '../src/storefront/source.ts';
 
@@ -61,15 +60,5 @@ describe('shouldUseFixtures', () => {
   it('uses fixtures in the emulator without a Firestore emulator', () => {
     expect(shouldUseFixtures({ FUNCTIONS_EMULATOR: 'true' })).toBe(true);
     expect(shouldUseFixtures({ FUNCTIONS_EMULATOR: 'true', FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080' })).toBe(false);
-  });
-});
-
-describe('handleApiRequest', () => {
-  it('serves health and an error envelope otherwise', () => {
-    expect(handleApiRequest({ method: 'GET', path: '/api/health' })).toEqual({ status: 200, body: { ok: true } });
-    expect(handleApiRequest({ method: 'GET', path: '/api/nope' })).toEqual({
-      status: 404,
-      body: { error: { code: 'not_found', message: 'APIが見つかりません。', retryable: false } },
-    });
   });
 });

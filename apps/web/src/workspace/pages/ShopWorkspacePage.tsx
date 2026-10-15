@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { toStorefrontSnapshot } from '@shelf2kumo/contracts';
+import { PRESETS } from '@shelf2kumo/themes';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { CatalogPanel } from '../components/CatalogPanel.tsx';
 import { ChatPanel } from '../components/ChatPanel.tsx';
 import { PreviewPane } from '../components/PreviewPane.tsx';
 import { PublishBar } from '../components/PublishBar.tsx';
-import { fixtureShops } from '../fixtures.ts';
+import { LoadingScreen } from '../auth/AuthProvider.tsx';
+import { useShop, type ShopWithId } from '../data/shops.ts';
 import { NotFoundPage } from './NotFoundPage.tsx';
 
 type Tab = 'chat' | 'catalog' | 'preview';
@@ -17,10 +20,26 @@ const TABS: Array<{ id: Tab; label: string }> = [
 
 export function ShopWorkspacePage() {
   const { shopId = '' } = useParams();
-  const snapshot = fixtureShops[shopId];
-  const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const shop = useShop(shopId);
 
-  if (!snapshot) return <NotFoundPage />;
+  if (shop.status === 'loading') return <LoadingScreen />;
+  if (shop.status === 'error') {
+    return (
+      <main className="ws-page">
+        <p className="ws-form-error" role="alert">
+          {shop.message}
+        </p>
+      </main>
+    );
+  }
+  if (!shop.data) return <NotFoundPage />;
+  return <Workspace shop={shop.data} />;
+}
+
+function Workspace({ shop }: { shop: ShopWithId }) {
+  const [activeTab, setActiveTab] = useState<Tab>('chat');
+  // Items arrive in Phase 3 and saved themes in Phase 4; until then the preview shows the profile.
+  const snapshot = useMemo(() => toStorefrontSnapshot({ shop, items: [], theme: PRESETS.modern }), [shop]);
 
   return (
     <div className="ws">
@@ -28,10 +47,9 @@ export function ShopWorkspacePage() {
         <Link className="ws-brand" to="/app">
           Shelf2Kumo
         </Link>
-        <span className="ws-topbar-shop">{snapshot.shop.name}</span>
-        <span className="ws-badge">デモデータ</span>
+        <span className="ws-topbar-shop">{shop.name}</span>
         <div className="ws-topbar-publish">
-          <PublishBar />
+          <PublishBar live={shop.liveReleaseId !== null} />
         </div>
       </header>
 
@@ -60,15 +78,9 @@ export function ShopWorkspacePage() {
           className="ws-panel ws-catalog"
           data-active={activeTab === 'catalog'}
         >
-          <CatalogPanel snapshot={snapshot} />
+          <CatalogPanel shop={shop} snapshot={snapshot} />
         </section>
-        <section
-          id="ws-panel-chat"
-          role="tabpanel"
-          aria-labelledby="ws-tab-chat"
-          className="ws-panel ws-chat"
-          data-active={activeTab === 'chat'}
-        >
+        <section id="ws-panel-chat" role="tabpanel" aria-labelledby="ws-tab-chat" className="ws-panel ws-chat" data-active={activeTab === 'chat'}>
           <ChatPanel />
         </section>
         <section
@@ -83,7 +95,7 @@ export function ShopWorkspacePage() {
       </div>
 
       <div className="ws-mobile-publish">
-        <PublishBar />
+        <PublishBar live={shop.liveReleaseId !== null} />
       </div>
     </div>
   );

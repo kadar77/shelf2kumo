@@ -15,6 +15,7 @@
     "@shelf2kumo/contracts": "workspace:*",
     "@shelf2kumo/themes": "workspace:*",
     "@shelf2kumo/web": "workspace:*",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "zod": "4.6.7"
   }
 }

@@ -12,7 +12,8 @@ Phase 0 (foundation) complete locally. The implementation baseline is [docs/Shel
 |---|---|
 | AMD text inference (`MiniCPM-V-4.7-35B-A3B`) | Passed from a local machine (Japanese reply, ~1 s); not yet from the deployed region |
 | AMD image input | Payload format confirmed with one synthetic image (correct product name, ~5 s); real-photo quality not measured |
-| Workspace shell, storefront renderer, emulator routing | Working with labeled demo data |
+| Workspace shell, storefront renderer, emulator routing | Working |
+| Sign-up/sign-in/reset, shop creation and profile editing, owner isolation | Done (Phase 1), verified against emulators; not yet deployed |
 | Firebase project `shelf2kumo` | Created; Hosting site exists. Firestore, Storage, web app and billing not set up yet |
 
 ## Architecture at a glance

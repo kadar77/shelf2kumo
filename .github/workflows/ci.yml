@@ -21,3 +21,9 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm check:secrets
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      # Rules and API tests against Auth/Firestore/Functions/Hosting emulators (offline demo project).
+      - run: pnpm test:emulator

@@ -9,6 +9,10 @@
   --ws-accent-text: #ffffff;
   --ws-warn-bg: #fff4e0;
   --ws-warn-text: #6b4100;
+  --ws-error: #b3261e;
+  --ws-error-bg: #fdecea;
+  --ws-success-bg: #e8f3ec;
+  --ws-success-text: #1e5631;
   --ws-radius: 10px;
   --ws-topbar-height: 56px;
   font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, "Noto Sans JP", Meiryo, system-ui,
@@ -250,7 +254,7 @@ a {
 
   .ws-body {
     display: grid;
-    grid-template-columns: 260px minmax(320px, 1fr) minmax(360px, 1fr);
+    grid-template-columns: 340px minmax(320px, 1fr) minmax(360px, 1fr);
   }
 
   .ws-panel,
@@ -401,4 +405,148 @@ a {
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* Forms */
+
+.ws-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ws-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ws-field label {
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.ws-field input,
+.ws-field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  font: inherit;
+}
+
+.ws-field textarea {
+  resize: vertical;
+}
+
+.ws-field input:disabled {
+  background: var(--ws-bg);
+  color: var(--ws-muted);
+}
+
+.ws-field [aria-invalid="true"] {
+  border-color: var(--ws-error);
+}
+
+.ws-hint {
+  margin: 0;
+  color: var(--ws-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.ws-field-error,
+.ws-form-error {
+  margin: 0;
+  color: var(--ws-error);
+  font-size: 0.875rem;
+}
+
+.ws-form-error {
+  padding: 10px 12px;
+  border-radius: var(--ws-radius);
+  background: var(--ws-error-bg);
+}
+
+.ws-notice-success {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--ws-radius);
+  background: var(--ws-success-bg);
+  color: var(--ws-success-text);
+  font-size: 0.875rem;
+}
+
+.ws-button-block {
+  width: 100%;
+}
+
+.ws-link-button {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--ws-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ws-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ws-create-shop {
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius);
+  background: var(--ws-surface);
+}
+
+.ws-catalog-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Auth screens */
+
+.ws-auth {
+  display: flex;
+  justify-content: center;
+  min-height: 100%;
+  padding: 48px 16px;
+}
+
+.ws-auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.ws-auth-card h1 {
+  margin: 8px 0 0;
+  font-size: 1.5rem;
+}
+
+.ws-auth-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.ws-auth-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }

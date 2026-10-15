@@ -536,7 +536,13 @@ Suggested agent handoff:
   - [ ] P0-6 Owner `getBlob()` of a private rendition. *Pending Phase 2:* bucket exists; needs owner-read Storage rules and bucket CORS for the workspace origin (CORS needs `gcloud`/`gsutil` or the Cloud Console). Storage emulator runs locally.
   - Firebase project `shelf2kumo` (alias `dev`; `default` stays the offline `demo-shelf2kumo`), 2026-10-15: Blaze plan enabled (owner); Hosting site `shelf2kumo.web.app`; Firestore `(default)` Native in `asia-northeast1`, delete protection on, deny-all rules deployed; web app `Shelf2Kumo Web` (`1:37543586877:web:f20ddf2672882e31444e54`) with config in local `.env.local`; default Storage bucket `shelf2kumo.firebasestorage.app` in `us-west1` with deny-all rules deployed; Email/Password sign-in enabled (verified by probe).
   - Local emulators: all five (Auth, Functions, Firestore, Storage, Hosting) start with OpenJDK 21; seeded release renders through the production storefront path (404 before seed, 200 after).
-- [ ] Phase 1: identity and isolation.
+- [x] Phase 1: identity and isolation (emulator-verified; not yet deployed to `dev`).
+  - [x] P1-1 Owner A creates and reloads a shop; owner B and anonymous clients cannot read it (rules suite) or change it (API: 404 for another owner, 401 anonymous).
+  - [x] P1-2 Body `ownerId` rejected by the strict contract (400); every direct client write denied by rules, including forged `ownerId`.
+  - [x] P1-3 Two concurrent requests claiming the same slug: exactly one 200, one 409 `slug_unavailable`; reservation points at the winner.
+  - [x] P1-4 Headless Chrome at 360×760 against the built app + emulators: login, wrong-password error, reset sent, weak-password error, sign-up, empty list, create shop, workspace, profile form, field error (focus moves to the field), save, preview, list. No horizontal overflow on any screen.
+  - Evidence: `pnpm test` 58 unit tests; `pnpm test:emulator` 20 rules/API tests (Auth, Firestore, Functions, Hosting emulators); added to CI.
+  - Not done in Phase 1: App Check enforcement (`APP_CHECK_ENFORCE=false` until a reCAPTCHA Enterprise site key exists); verified-email gate (Should, applies to extraction/publishing); deploy of rules/functions/hosting to `dev` (awaiting owner go-ahead).
 - [ ] Phase 2: private upload and adapter.
 - [ ] Phase 3: extraction jobs and automatic catalog.
 - [ ] Phase 4: conversational management, themes and preview.
@@ -580,6 +586,11 @@ Suggested agent handoff:
 | 2026-10-15 | Firestore `(default)` in `asia-northeast1`, delete protection on; `firebase.json` pins `firestore.location` | A rules deploy auto-created the database in `nam5`; it was empty and deleted immediately, then recreated in Tokyo. The pinned location prevents recurrence |
 | 2026-10-15 | OpenJDK 21 (Homebrew) for Firestore/Storage emulators; `pnpm seed:emulator` publishes the demo fixture into the emulator | Enables rules/isolation tests locally; seeding exercises the production storefront path |
 | 2026-10-15 | Default Storage bucket in `us-west1`; deny-all Storage rules deployed immediately | Owner choice for the no-cost tier. Rules deployed so a console "test mode" bucket is never open. Revisit (`asia-northeast1`) if upload latency or data-residency review requires it |
+| 2026-10-15 | Phase 1: per-target revisions start with the profile (`profileRevision`); every mutation also bumps `contentRevision` | Matches §6; item and theme revisions arrive with their phases |
+| 2026-10-15 | Phase 1: slugs are random 8 characters without look-alikes, editable until first publication; reserved words (`demo`, `api`, `app`, …) refused | Avoids route collisions and the demo shop |
+| 2026-10-15 | Phase 1: non-owners receive 404 (not 403) from shop commands | No shop-existence leak |
+| 2026-10-15 | Phase 1: App Check verified server-side when `APP_CHECK_ENFORCE=true`; client initializes it when `VITE_APP_CHECK_SITE_KEY` is set | Enforcement waits for a reCAPTCHA Enterprise key (owner console action) |
+| 2026-10-15 | Phase 1: the client connects to emulators only when `VITE_USE_EMULATORS=true` **and** served from localhost/127.0.0.1, using project `demo-shelf2kumo` | A production build can never talk to emulators even if the flag leaks |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

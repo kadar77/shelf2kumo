@@ -5,6 +5,11 @@ export const ApiErrorCode = z.enum([
   'unauthenticated',
   'forbidden',
   'not_found',
+  'method_not_allowed',
+  /** The target changed since the client read it (stale expectedRevision). */
+  'revision_conflict',
+  /** Requested slug is reserved, taken, or locked after first publication. */
+  'slug_unavailable',
   'conflict',
   'quota_exceeded',
   'payload_too_large',

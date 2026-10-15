@@ -18,13 +18,15 @@
     "emulators:all": "pnpm build && firebase emulators:start",
     "smoke:amd": "tsx --env-file-if-exists=.env.local scripts/amd-smoke.ts",
     "eval:images": "node scripts/render-test-images.mjs",
-    "seed:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx functions/scripts/seed-emulator.ts"
+    "seed:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx functions/scripts/seed-emulator.ts",
+    "test:emulator": "pnpm build && firebase emulators:exec --only auth,firestore,functions,hosting --project demo-shelf2kumo 'pnpm --filter @shelf2kumo/tests test:emulator'"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "22.20.5",
     "eslint": "10.12.0",
     "eslint-plugin-react-hooks": "7.1.1",
+    "firebase-tools": "15.34.0",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.2",

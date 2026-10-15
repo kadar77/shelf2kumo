@@ -22,6 +22,8 @@ export default defineConfig({
   plugins: [react(), workspaceDeepLinks()],
   // One .env.local at the repo root; Vite exposes only VITE_* variables to the client.
   envDir: `${root}../..`,
+  // In dev, /api goes through the Hosting emulator's rewrite to the api function (pnpm emulators:all).
+  server: { proxy: { '/api': 'http://127.0.0.1:5050' } },
   build: {
     // The storefront function reads the manifest to link the fingerprinted storefront stylesheet.
     manifest: true,

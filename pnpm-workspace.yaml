@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - functions
+  - tests
 
 onlyBuiltDependencies:
   - esbuild
@@ -9,3 +10,4 @@ onlyBuiltDependencies:
 ignoredBuiltDependencies:
   - '@firebase/util'
   - protobufjs
+  - re2

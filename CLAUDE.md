@@ -10,7 +10,7 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phases 0–5 are done, tested against emulators and live in production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`): photos become draft items via AMD extraction, Japanese chat edits the draft, and one confirmation publishes a server-rendered storefront with QR sharing and unpublish. App Check is enforced on `/api`. See spec §12. Phase 6 (polish, release verification and demo) is next.
+Phases 0–6 (the MVP) are done and live in production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`). Phase 7 (multi-product shelf and menu extraction) and Workstream E (model evaluation with consented real photos) are optional next steps. Operations: `docs/DEPLOYMENT.md`; demo: `docs/DEMO.md`; status: spec §12.
 
 The workspace uses real Firebase Auth and Firestore. With `VITE_USE_EMULATORS=true` in `.env.local`, `pnpm dev` (Vite) and the Hosting emulator connect to the local emulators; run `pnpm emulators:all` alongside `pnpm dev`.
 
@@ -39,9 +39,13 @@ pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
 | `pnpm verify` | All of the above in CI order |
 | `pnpm emulators` | Build, then Functions + Hosting emulators (Hosting at http://127.0.0.1:5050, demo project `demo-shelf2kumo`) |
 | `pnpm emulators:all` | Same plus Auth/Firestore/Storage emulators (requires Java 11+; OpenJDK 21 via Homebrew is on PATH through `~/.zshrc`) |
-| `pnpm seed:emulator` | Publish the labeled demo shop into the running Firestore emulator (production storefront path) |
+| `pnpm seed:emulator` | Publish the labeled demo shop (with synthetic photos) into the running emulators |
 | `pnpm deploy:prod` | Deploy Firestore/Storage rules, functions and hosting to production (`--project prod`) |
 | `pnpm check:queries` | After deploys: run every composite/collection-group query against production (read-only; catches missing indexes the emulator ignores) |
+| `pnpm test:e2e` | Build with emulator config, then the release browser flow at 360px in headless Chrome (needs Java and Chrome) |
+| `pnpm ops:rollback --shop <id> [--release <id> --confirm]` | List releases / move one shop's live pointer to a previous release |
+| `pnpm ops:cleanup-test-data [--apply]` | Remove automated-check test accounts and their data from production |
+| `GCLOUD_PROJECT=shelf2kumo pnpm seed:demo --confirm` | (Re)publish the labeled demo shop with synthetic photos |
 | `pnpm test:emulator` | Build, then run `tests/` (rules + API suites) inside `firebase emulators:exec` (needs Java) |
 | `pnpm smoke:amd [--image <path> --consented] [--model <name>]` | ONE paid AMD request; manual only, never in tests |
 | `pnpm try:extraction [--only <id>] [--model <name>]` | Run the extraction prompt on the evaluation images vs ground truth (one paid request per image; raw output to `evaluation/results/`) |

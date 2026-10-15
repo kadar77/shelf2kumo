@@ -1,17 +1,19 @@
 import { draftItemsForSnapshot, toStorefrontSnapshot, type SnapshotImageInfo, type StorefrontImage } from '@shelf2kumo/contracts';
-import { useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { CatalogPanel } from '../components/CatalogPanel.tsx';
 import { ChatPanel } from '../components/ChatPanel.tsx';
 import { PreviewPane } from '../components/PreviewPane.tsx';
 import { PublishBar } from '../components/PublishBar.tsx';
-import { PublishDialog } from '../components/PublishDialog.tsx';
 import { LoadingScreen } from '../auth/AuthProvider.tsx';
 import { useItems, useJobs } from '../data/catalog.ts';
 import { useActions, useMessages, useTheme } from '../data/chat.ts';
 import { useShop, type ShopWithId } from '../data/shops.ts';
 import { useRenditionUrls, useShopImages } from '../images/images.ts';
 import { NotFoundPage } from './NotFoundPage.tsx';
+
+// The publish dialog (with the QR code library) loads when first opened.
+const PublishDialog = lazy(() => import('../components/PublishDialog.tsx').then((m) => ({ default: m.PublishDialog })));
 
 type Tab = 'chat' | 'catalog' | 'preview';
 
@@ -102,7 +104,7 @@ function Workspace({ shop }: { shop: ShopWithId }) {
       </header>
 
       <div className="ws-tabs" role="tablist" aria-label="表示切り替え">
-        {TABS.map((tab) => (
+        {TABS.map((tab, index) => (
           <button
             key={tab.id}
             type="button"
@@ -110,8 +112,18 @@ function Workspace({ shop }: { shop: ShopWithId }) {
             id={`ws-tab-${tab.id}`}
             aria-selected={activeTab === tab.id}
             aria-controls={`ws-panel-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
             className="ws-tab"
             onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(event) => {
+              // WAI-ARIA tabs: arrows move between tabs, Home/End jump to the ends.
+              const keys: Record<string, number> = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: TABS.length - 1 };
+              if (!(event.key in keys)) return;
+              event.preventDefault();
+              const next = TABS[((keys[event.key] as number) + TABS.length) % TABS.length] as (typeof TABS)[number];
+              setActiveTab(next.id);
+              document.getElementById(`ws-tab-${next.id}`)?.focus();
+            }}
           >
             {tab.label}
           </button>
@@ -151,7 +163,11 @@ function Workspace({ shop }: { shop: ShopWithId }) {
         </section>
       </div>
 
-      {publishMode && <PublishDialog shopId={shop.id} mode={publishMode} liveUrl={liveUrl} onClose={() => setPublishMode(null)} />}
+      {publishMode && (
+        <Suspense fallback={null}>
+          <PublishDialog shopId={shop.id} mode={publishMode} liveUrl={liveUrl} onClose={() => setPublishMode(null)} />
+        </Suspense>
+      )}
 
       <div className="ws-mobile-publish">
         <PublishBar shop={shop} onPublish={() => setPublishMode('publish')} onShare={() => setPublishMode('share')} />

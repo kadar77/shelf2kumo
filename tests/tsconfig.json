@@ -7,9 +7,11 @@
     "jsx": "react-jsx"
   },
   "include": [
-    "rules",
     "api",
+    "e2e",
+    "rules",
     "support",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "vitest.e2e.config.ts"
   ]
 }

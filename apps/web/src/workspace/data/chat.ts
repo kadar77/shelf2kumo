@@ -2,7 +2,7 @@ import type { ActionState, ActionSummary, ChatMessageDoc, FieldDiff, ThemeTokens
 import { PRESETS } from '@shelf2kumo/themes';
 import { collection, doc, limit, limitToLast, onSnapshot, orderBy, query, type Timestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { db } from '../firebase.ts';
+import { db } from '../firestore.ts';
 
 export type MessageWithId = ChatMessageDoc & { id: string; createdAtMs: number | null };
 export type ActionWithId = ActionSummary & { id: string };

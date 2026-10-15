@@ -571,7 +571,7 @@ Suggested agent handoff:
   - [x] P4-4 Preview renders from saved Firestore data through `toStorefrontSnapshot` + saved theme; unit test: identical storefront body for preview and server render with a customized theme; theme variables are set only on the preview's `.sf` container (unit test; live: workspace background unchanged with the dark palette).
   - [x] P4-5 Profile form, item editor and theme picker cover every required field without chat (live picker check: ダーク + 明朝 reflected in preview).
   - Evidence: `pnpm test` 101 unit tests; `pnpm test:emulator` 68 tests (chat suite 18, fixture planner); live production walkthroughs at 360px with App Check debug token (deleted after use); test data deleted.
-- [ ] Live conversational action verification.
+- [x] Live conversational action verification (Phase 4 and Phase 6 rehearsals).
 - [x] Phase 5: publish, public storefront and sharing (emulator-verified and live in production).
   - [x] P5-1 Live (2026-10-15, real AMD): synthetic photo → 「ほうじ茶」 item created automatically → published with one change-summary confirmation, without visiting preview or approving the item.
   - [x] P5-2 Live public page loaded with JavaScript disabled contains the shop, the item and its photo, with zero `<script>` tags; draft edits stay off the public page until the next publication (emulator).
@@ -582,7 +582,16 @@ Suggested agent handoff:
   - [x] P5-7 `/media/{slug}/{hash}.jpg` serves only photos referenced by the live release; draft-only or unknown hashes return 404.
   - [x] P5-8 QR code decoded in the live walkthrough equals the public URL and the page renders at 360px; `/sitemap.xml` lists only live non-demo catalogs.
   - Evidence: `pnpm test` 108 unit tests; `pnpm test:emulator` 79 tests (publish suite 11); emulator and production walkthroughs; production test data and App Check debug tokens deleted.
-- [ ] Phase 6: polish, release verification and demo.
+- [x] Phase 6: polish, release verification and demo (production; no staging by owner decision).
+  - [x] P6-1 Real AMD extraction in production on a project-generated (synthetic) image: 「ほうじ茶 864円（税込）」 in 38 s, distinguishable from fixtures (jobs record the model; fixture results carry 【フィクスチャ】 and a badge). **Real-photo quality: not measured** (no consented real photos yet).
+  - [x] P6-2 Owner isolation (Firestore 9 + Storage 7 rules tests, API 404s) and public HTML tests pass; `pnpm check:secrets` passes on client assets; 472 production log entries across all functions contain no AMD key, bearer tokens, image payloads or user-ID storage paths (scan 2026-10-15, export deleted).
+  - [x] P6-3 Japanese next-step messages demonstrated for quotas (extraction 20/day, chat 100/day: emulator), extraction failures, rejected uploads, publish blocked by a nameless item (browser test screenshot) and stale confirmations.
+  - [x] P6-4 Keyboard: sign-up completed by keyboard in the browser test; dialog traps Tab, closes on Escape and restores focus; tabs support arrow keys/Home/End. Contrast: six palettes and ten workspace color pairs ≥ 4.5:1 (unit tests). 360px: 43 storefront layout variants (density × image ratio × font × corners, palettes, long product name) and every browser-test screen without overflow. Saved themes stay identical across product-only republishes (emulator).
+  - [x] P6-5 No staging project (owner decision); emulator (`demo-shelf2kumo`) and production data are separated by project and by the localhost-only emulator switch. Rollback documented and implemented (`pnpm ops:rollback`, emulator-tested; code rollback by redeploying a commit) in `docs/DEPLOYMENT.md`.
+  - [x] P6-6 Demo rehearsed in production with real models (71 s: chat profile → photo → automatic item → chat correction → publish → public page → unpublish); script and fallbacks in `docs/DEMO.md`; no benchmark claims.
+  - Release browser test (`pnpm test:e2e`, CI): login → describe shop in chat → upload → edit → nameless-item publish block → theme/preview → confirm and publish → public HTML/media → unpublish, at 360px with fixtures.
+  - Performance (single runs, 2026-10-15, headless Chrome 360px, Fast 3G + 4× CPU): storefront 0 KB JS, ~4 KB HTML, FCP/LCP 1.4 s (unthrottled 0.7/0.8 s), CDN-cached TTFB 63 ms; workspace sign-in FCP 1.74 s / LCP 1.84 s after code splitting (was 3.24/3.34 s; initial JS 140 KB gzip instead of 332 KB).
+  - Labeled demo shop seeded in production (`/s/demo`, three synthetic photos, noindex, excluded from the sitemap).
 - [ ] Phase 7: optional shelf/menu expansion.
 - [ ] Workstream E: standalone evaluation (deferred until dataset availability).
 
@@ -653,6 +662,12 @@ Suggested agent handoff:
 | 2026-10-15 | Phase 5: snapshot hash = SHA-256 of canonical (key-sorted) JSON of the schema-parsed snapshot; publish rebuilds the draft inside the transaction and requires the same hash and `contentRevision` | The published content is exactly what the owner confirmed, independent of Firestore field order |
 | 2026-10-15 | Phase 5: prepare is blocked (409) by running extraction jobs and by items without names, with Japanese next steps | Spec §8/§9; no partial or nameless products go public |
 | 2026-10-15 | Phase 5: QR codes are generated client-side (`qrcode` library, SVG for display, PNG for download); `robots.txt` disallows `/app/` and `/api/` and points to the sitemap; the sitemap lists shop pages only | No extra service; product URLs can be added later |
+| 2026-10-15 | Phase 6: no staging project; release gate = `pnpm verify` + `pnpm test:emulator` + `pnpm test:e2e`, then deploy, `pnpm check:queries`, smoke checks | Owner decision; emulators are the pre-production environment |
+| 2026-10-15 | Phase 6: per-shop content rollback by moving the live pointer to a retained release (`pnpm ops:rollback`); code rollback by redeploying a commit | Spec §10; immutable releases make rollback a pointer change |
+| 2026-10-15 | Phase 6: release browser test drives headless Chrome over the DevTools protocol (no Playwright dependency) and runs in CI | Small dependency surface; Chrome is preinstalled on CI runners |
+| 2026-10-15 | Phase 6: workspace code-split (auth-only sign-in bundle; Firestore/Storage with shop pages; publish dialog and QR library on demand) | Halved first paint on slow mobile networks |
+| 2026-10-15 | Phase 6: production demo shop seeded from synthetic product photos with `pnpm seed:demo` (labeled 合成画像, demo banner, noindex) | Landing page link works; no real business or photo is implied |
+| 2026-10-15 | Phase 6: test-account cleanup committed as `pnpm ops:cleanup-test-data` (dry run by default) | Repeatable removal of automated-check data |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

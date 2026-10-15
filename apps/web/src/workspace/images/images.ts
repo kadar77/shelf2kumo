@@ -10,7 +10,8 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { getBlob, ref, uploadBytes } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api.ts';
-import { db, storage } from '../firebase.ts';
+import { db } from '../firestore.ts';
+import { storage } from '../storage.ts';
 import { prepareUpload } from './prepareUpload.ts';
 
 export type ImageWithId = ImageDoc & { id: string };

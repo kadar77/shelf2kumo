@@ -194,13 +194,36 @@ export function PublishDialog({
     if (mode === 'publish') void prepare();
   }, [mode, prepare]);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard: focus moves into the dialog, Tab stays inside it, Escape closes, and focus returns
+  // to the control that opened it.
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, [tabindex]:not([tabindex="-1"])')];
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      opener?.focus?.();
+    };
   }, [onClose]);
 
   async function publish(prepared: PreparePublicationResponse) {
@@ -223,7 +246,7 @@ export function PublishDialog({
 
   return (
     <div className="ws-modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="ws-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} className="ws-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
         <div className="ws-modal-header">
           <h2 id={titleId}>{view.kind === 'shared' ? (view.justPublished ? '公開しました' : '公開中のページ') : 'この変更を公開しますか？'}</h2>
           <button ref={closeRef} type="button" className="ws-link-button" onClick={onClose} aria-label="閉じる">

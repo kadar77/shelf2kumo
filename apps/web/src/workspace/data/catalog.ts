@@ -1,7 +1,7 @@
 import type { ItemDoc, ItemField, JobDoc, JobErrorCode, JobOutcome, JobState } from '@shelf2kumo/contracts';
 import { collection, limit, onSnapshot, orderBy, query, type DocumentData } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { db } from '../firebase.ts';
+import { db } from '../firestore.ts';
 
 export type ItemWithId = ItemDoc & { id: string };
 export type JobWithId = JobDoc & { id: string };

@@ -6,7 +6,7 @@ Shelf2Kumo helps small Japanese shops put their products online from a phone. Th
 
 ## Status
 
-Phases 0–5 are complete and live at https://shelf2kumo.web.app: the full photo → draft → publish → share flow works end to end. The implementation baseline is [docs/Shelf2Kumo-Implementation-Specification.md](docs/Shelf2Kumo-Implementation-Specification.md); progress is tracked in its §12.
+The MVP (Phases 0–6) is complete and live at https://shelf2kumo.web.app: the full photo → draft → chat edits → publish → share flow works end to end with real AMD inference. See [docs/DEMO.md](docs/DEMO.md) for the demo and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for operations. The implementation baseline is [docs/Shelf2Kumo-Implementation-Specification.md](docs/Shelf2Kumo-Implementation-Specification.md); progress is tracked in its §12.
 
 | Item | Status |
 |---|---|
@@ -18,6 +18,8 @@ Phases 0–5 are complete and live at https://shelf2kumo.web.app: the full photo
 | Photo → automatic draft product (AMD extraction jobs, quotas, retries), item editing/reorder/delete | Done (Phase 3); live with real inference |
 | Japanese chat editing (prices, hours, items, themes) with diffs, approval for deletions, undo; theme picker | Done (Phase 4); live with a model fallback chain |
 | One-confirmation publish, public storefront `/s/:slug` with photos, unpublish, URL/QR sharing, sitemap | Done (Phase 5); live |
+| Release verification: browser test in CI, keyboard/contrast/360px checks, rollback, log secret scan, demo shop | Done (Phase 6) |
+| Real-photo recognition quality | **Not measured** (synthetic images only so far) |
 | Firebase project `shelf2kumo` (production) | Blaze; Firestore (Tokyo), Storage (us-west1), Auth, App Check enforced on the API |
 
 ## Architecture at a glance
@@ -35,7 +37,7 @@ Requirements: Node ≥ 22.22, pnpm 10, Firebase CLI. Java 11+ only for the Auth/
 pnpm install
 pnpm dev          # http://localhost:5173/ (landing) and /app/shops/demo (workspace)
 pnpm verify       # typecheck, lint, test, build, client secret scan
-pnpm emulators    # http://127.0.0.1:5050/s/demo (storefront via Hosting → Function rewrite)
+pnpm test:emulator && pnpm test:e2e   # rules/API suites and the release browser flow (Java + Chrome)
 ```
 
 Copy `.env.example` to `.env.local` for local scripts; never commit real keys. `pnpm smoke:amd` sends one paid request to the AMD endpoint to check connectivity.

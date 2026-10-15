@@ -3,6 +3,8 @@ import { Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import sharp from 'sharp';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { PALETTES } from '../../packages/themes/src/index.ts';
+import { listReleases, rollbackToRelease } from '../../functions/src/publishing/rollback.ts';
 import { HOSTING_ORIGIN, PROJECT_ID, STORAGE_BUCKET, api, createTestUser, type TestUser } from '../support/emulators.ts';
 
 const app = initializeApp({ projectId: PROJECT_ID, storageBucket: STORAGE_BUCKET }, 'publish-tests');
@@ -236,5 +238,45 @@ describe('unpublish, isolation and media (P5-4 – P5-8)', () => {
     expect(sitemap.status).toBe(200);
     expect(sitemap.body).toContain(`/s/${live.slug}</loc>`);
     expect(sitemap.body).not.toContain(`/s/${gone.slug}</loc>`);
+  });
+});
+
+describe('operations (P6-4, P6-5)', () => {
+  it('keeps the saved theme stable across product-only republishes', async () => {
+    const { shopId, slug } = await newShop();
+    const itemId = await addItem(shopId, { name: 'ほうじ茶', priceJpy: 864 });
+    const tokens = { templateId: 'modern', templateVersion: 1, colors: PALETTES.green.colors, fontPreset: 'mincho', density: 'spacious', corners: 'round', imageAspect: '1:1' };
+    await api('PATCH', `/api/shops/${shopId}/theme`, { user: owner, body: { expectedRevision: 0, tokens } });
+    const first = await publish(shopId);
+
+    await api('PATCH', `/api/shops/${shopId}/items/${itemId}`, { user: owner, body: { expectedRevision: 0, changes: { priceJpy: 900 } } });
+    const prepared = await prepare(shopId);
+    expect(prepared.body).toMatchObject({ summary: { themeChanged: false, changed: [{ name: 'ほうじ茶', fields: ['priceJpy'] }] } });
+    const { confirmationId, snapshotHash } = prepared.body as { confirmationId: string; snapshotHash: string };
+    const second = await api('POST', `/api/shops/${shopId}/publish`, { user: owner, body: { confirmationId, snapshotHash } });
+    const releaseA = (await db.doc(`shops/${shopId}/releases/${first.published.releaseId}`).get()).get('snapshot.theme');
+    const releaseB = (await db.doc(`shops/${shopId}/releases/${(second.body as { releaseId: string }).releaseId}`).get()).get('snapshot.theme');
+    expect(releaseB).toEqual(releaseA);
+    expect(releaseB).toEqual(tokens);
+    expect((await fetchPublic(`/s/${slug}`)).body).toContain(`--sf-bg:${PALETTES.green.colors.background}`);
+  });
+
+  it('rolls one shop back to a previous release without touching drafts or other shops', async () => {
+    const { shopId, slug } = await newShop();
+    const itemId = await addItem(shopId, { name: 'ほうじ茶', priceJpy: 864 });
+    const first = await publish(shopId);
+    await api('PATCH', `/api/shops/${shopId}/items/${itemId}`, { user: owner, body: { expectedRevision: 0, changes: { priceJpy: 999 } } });
+    await publish(shopId);
+    expect((await fetchPublic(`/s/${slug}`)).body).toContain('999円');
+
+    const releases = await listReleases(db, shopId);
+    expect(releases).toHaveLength(2);
+    expect(releases[0]?.live).toBe(true);
+    await rollbackToRelease(db, shopId, first.published.releaseId);
+
+    expect((await fetchPublic(`/s/${slug}`)).body).toContain('864円');
+    expect((await db.doc(`shops/${shopId}/items/${itemId}`).get()).get('priceJpy')).toBe(999);
+    const other = await newShop();
+    await expect(rollbackToRelease(db, other.shopId, first.published.releaseId)).rejects.toThrow(/not found/);
   });
 });

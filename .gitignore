@@ -32,6 +32,7 @@ emulator-data/
 # Evaluation data (consent-bound, never committed)
 evaluation/images/
 evaluation/results/
+tests/e2e/output/
 
 # Local tooling
 .claude/settings.local.json

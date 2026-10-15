@@ -27,3 +27,5 @@ jobs:
           java-version: 21
       # Rules and API tests against Auth/Firestore/Functions/Hosting emulators (offline demo project).
       - run: pnpm test:emulator
+      # Release browser flow at 360px with headless Chrome (preinstalled on ubuntu-latest).
+      - run: pnpm test:e2e

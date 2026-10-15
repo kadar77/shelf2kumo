@@ -18,12 +18,16 @@
     "emulators:all": "pnpm build && firebase emulators:start",
     "smoke:amd": "tsx --env-file-if-exists=.env.local scripts/amd-smoke.ts",
     "eval:images": "node scripts/render-test-images.mjs",
-    "seed:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx functions/scripts/seed-emulator.ts",
+    "seed:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 tsx functions/scripts/seed-demo.ts",
     "test:emulator": "pnpm build && firebase emulators:exec --only auth,firestore,storage,functions,hosting --project demo-shelf2kumo 'pnpm --filter @shelf2kumo/tests test:emulator'",
     "deploy:prod": "firebase deploy --only firestore,storage,functions,hosting --project prod",
     "try:extraction": "tsx --env-file-if-exists=.env.local scripts/try-extraction.ts",
     "check:queries": "tsx functions/scripts/check-production-queries.ts",
-    "try:chat": "tsx --env-file-if-exists=.env.local scripts/try-chat.ts"
+    "try:chat": "tsx --env-file-if-exists=.env.local scripts/try-chat.ts",
+    "ops:rollback": "tsx functions/scripts/rollback.ts",
+    "test:e2e": "VITE_USE_EMULATORS=true pnpm build && firebase emulators:exec --only auth,firestore,storage,functions,hosting --project demo-shelf2kumo 'pnpm --filter @shelf2kumo/tests test:e2e'",
+    "seed:demo": "tsx functions/scripts/seed-demo.ts",
+    "ops:cleanup-test-data": "tsx functions/scripts/cleanup-test-data.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

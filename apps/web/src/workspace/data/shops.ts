@@ -1,7 +1,7 @@
 import type { ShopDoc } from '@shelf2kumo/contracts';
 import { collection, doc, onSnapshot, query, where, type DocumentData } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { db } from '../firebase.ts';
+import { db } from '../firestore.ts';
 
 export type ShopWithId = ShopDoc & { id: string };
 

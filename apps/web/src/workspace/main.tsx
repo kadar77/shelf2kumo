@@ -1,13 +1,15 @@
-import { StrictMode } from 'react';
+import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Outlet, createBrowserRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { LoginPage, ResetPasswordPage, SignupPage } from './auth/AuthPages.tsx';
-import { AuthProvider, RequireAuth } from './auth/AuthProvider.tsx';
+import { AuthProvider, LoadingScreen, RequireAuth } from './auth/AuthProvider.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
-import { ShopListPage } from './pages/ShopListPage.tsx';
-import { ShopWorkspacePage } from './pages/ShopWorkspacePage.tsx';
 import './workspace.css';
+
+// Shop pages pull in Firestore and Storage; load them only after sign-in.
+const ShopListPage = lazy(() => import('./pages/ShopListPage.tsx').then((m) => ({ default: m.ShopListPage })));
+const ShopWorkspacePage = lazy(() => import('./pages/ShopWorkspacePage.tsx').then((m) => ({ default: m.ShopWorkspacePage })));
 
 const router = createBrowserRouter([
   {
@@ -23,7 +25,9 @@ const router = createBrowserRouter([
       {
         element: (
           <RequireAuth>
-            <Outlet />
+            <Suspense fallback={<LoadingScreen />}>
+              <Outlet />
+            </Suspense>
           </RequireAuth>
         ),
         children: [

@@ -88,7 +88,9 @@ describe.skipIf(!chromePath())('release flow (P6 browser test)', () => {
     await page.click('追加する', '.ws-items');
     await page.waitFor(has('商品名が未入力です'));
     await page.click('公開する', '.ws-mobile-publish');
-    await page.waitFor(has('商品名が未入力の商品が 1 件あります'));
+    // The server's gate refuses inside the (lazily loaded) dialog; the item list shows a similar banner,
+    // so the check is scoped to the dialog or Escape could fire before it mounts.
+    await page.waitFor(`document.querySelector('.ws-modal [role=alert]')?.innerText.includes('商品名が未入力の商品が 1 件あります')`);
     await shot('e2e-02-publish-blocked');
     await page.press('Escape');
     await page.waitFor(`!document.querySelector('.ws-modal')`);

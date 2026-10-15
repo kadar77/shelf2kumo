@@ -141,9 +141,16 @@ export async function openPage(options: { width?: number; height?: number } = {}
       return { overflow };
     },
     async close() {
+      // Ask Chrome to shut down (helpers included) and wait for it, so the profile is no longer being written.
+      if (proc.exitCode === null && proc.signalCode === null) {
+        const exited = new Promise((resolve) => proc.once('exit', resolve));
+        socket.send(JSON.stringify({ id: ++nextId, method: 'Browser.close' }));
+        const force = setTimeout(() => proc.kill('SIGKILL'), 5_000);
+        await exited;
+        clearTimeout(force);
+      }
       socket.close();
-      proc.kill('SIGKILL');
-      rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     },
   };
   return page;

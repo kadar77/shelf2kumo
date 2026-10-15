@@ -62,15 +62,16 @@ These apply everywhere; later sections do not repeat them.
 | One React + Vite + TypeScript app (`apps/web`) | Adopted in v1.5 | Workspace SPA at `/app/**`; the same app's storefront components are server-rendered for all shops at `/s/**` |
 | Storefront rendered on request | Adopted in v1.4; Astro dropped in v1.5 | `react-dom/server` static rendering in a Cloud Function behind a Hosting rewrite, CDN-cached, zero client JS; replaces the v1.3 static build pipeline |
 | Region | Proposed: `asia-northeast1` (Tokyo) | Verify availability for Functions/Firestore/Storage in Phase 0 and record actual choices |
-| AMD endpoint | Confirmed by user-provided request | `https://developer.amd.com.cn/radeon/api/v1/chat/completions` |
+| AMD endpoint | Confirmed; **fixed by the hackathon** (no alternative region) | Base `https://developer.amd.com.cn/radeon/api` (`AMD_BASE_URL`); calls go to `<base>/v1/chat/completions` |
+| Available models (hackathon key, 2026-10-15) | Listed by owner; capabilities unverified | DeepSeek-V4.1-Flash, DeepSeek-V4-Flash, DeepSeek-V4-Flash-Vision-Exp, Gemma-4-31B-IT, GLM-5.3-Flash, MiMo-V2.6-Flash, MinerU2.5-Pro, MiniCPM5-2B, MiniCPM-V-4.7-1B, MiniCPM-V-4.7-35B-A3B, Qwen3.8-27B, Qwen3.8-Flash-Next. Vision support is confirmed only for MiniCPM-V-4.7-35B-A3B |
 | AMD request model | Confirmed by sample | `MiniCPM-V-4.7-35B-A3B` |
 | Response text location | Confirmed by sample | `choices[0].message.content` |
 | Response model identity | Observed | May be `self-dploy/MiniCPM-V-4.7-35B-A3B`; do not require equality with request model |
 | Reachability/latency from Cloud Functions region | **Unverified; observed unstable** | From a laptop in Japan the path degraded for minutes (TCP connect 8–12 s, TLS failures) before recovering to ~0.1 s. Verify from the deployed region; budget retries and a user-visible "AI is slow" state |
 | Image message format | **Confirmed** (one synthetic image) | `image_url` part with a base64 JPEG data URL is accepted and the image is consumed (≈490 image tokens). Size limits remain unverified |
 | JSON mode, schema mode, tools, streaming | Unverified; not required | Schema-validated JSON proposals |
-| Japanese action-planning reliability | **Unverified; known risk** | MiniCPM-V is a vision model; keep action set small, few-shot prompts, deterministic UI shortcuts |
-| Fallback vision model | Not chosen | If the vision gate fails, record a reviewed plan B in §12 before switching; never switch automatically |
+| Japanese action-planning reliability | **Unverified; known risk** | MiniCPM-V is a vision model; keep action set small, few-shot prompts, deterministic UI shortcuts. Text-only candidates for a separate chat model (e.g. DeepSeek-V4.1-Flash, Qwen3.8-Flash-Next, GLM-5.3-Flash) may be compared in Phase 4 |
+| Fallback vision model | Not chosen | Candidates by name: MiniCPM-V-4.7-1B, DeepSeek-V4-Flash-Vision-Exp, Gemma-4-31B-IT, MinerU2.5-Pro (document/OCR oriented). Compare on the evaluation set before any switch; record a reviewed decision in §12; never switch automatically |
 | Recognition accuracy / model ranking | Not measured | No accuracy claims; Workstream E |
 
 The successful text response does not establish Japanese OCR quality, vision compatibility, latency under load or the hardware serving each request. Preserve provider evidence where available and verify any event-specific evidence requirements separately.
@@ -249,7 +250,8 @@ The supplied response has `choices[0].message.content = "Hello!"`, `finish_reaso
 | Variable | Notes |
 |---|---|
 | `AMD_API_KEY` | Secret via Firebase secret management, bound only to extraction and chat workers; local scripts read the environment |
-| `AMD_CHAT_COMPLETIONS_URL` | Exact full endpoint above; do not append `/chat/completions` |
+| `AMD_BASE_URL` | Hackathon-provided base (`https://developer.amd.com.cn/radeon/api`); the adapter appends `/v1/chat/completions` (or `/chat/completions` if the base ends in `/v1`) |
+| `AMD_CHAT_COMPLETIONS_URL` | Optional exact endpoint; takes precedence over `AMD_BASE_URL` |
 | `AMD_MODEL` | Default `MiniCPM-V-4.7-35B-A3B`, no provider prefix |
 | `AMD_REQUEST_TIMEOUT_MS` | Initial 45,000; tune from observations |
 | `EXTRACTION_PROMPT_VERSION`, `CHAT_PROMPT_VERSION` | Immutable versions recorded with every result |
@@ -531,8 +533,9 @@ Suggested agent handoff:
   - [x] P0-3 `pnpm check:secrets` passed on `apps/web/dist`, including a scan for the actual `AMD_API_KEY` value.
   - [ ] P0-4 *Local pass:* MiniCPM-V text request from a laptop, 2026-10-14T17:54:47Z, 1,016 ms, `finish_reason: stop`, returned model `self-dploy/MiniCPM-V-4.7-35B-A3B`, Japanese reply. *Blocked:* request from a deployed function in `asia-northeast1` (no Firebase project yet).
   - [x] P0-5 Vision compatibility gate **passed** (laptop): 2026-10-14T23:53:40Z, synthetic `s1-hojicha-pouch.jpg` (1200×900 JPEG, 132 KB) as a base64 `image_url` data URL; MiniCPM-V answered 「ほうじ茶」 (correct), 504 prompt tokens, 4,737 ms, `finish_reason: stop`. An earlier attempt at 23:48Z failed with `UND_ERR_CONNECT_TIMEOUT` during a network-path degradation (see §3). Synthetic image only; real-photo quality is not measured.
-  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Blocked:* Storage bucket not created on `shelf2kumo` (needs Blaze plan) or Java for the Storage emulator, plus Phase 2 Storage rules.
-  - Firebase project `shelf2kumo` (checked via CLI 2026-10-15): Hosting site `shelf2kumo.web.app` exists; no web app registered; Firestore API not enabled (no database); billing plan and Storage bucket not checkable without `gcloud`. Aliased as `dev` in `.firebaserc`; `default` stays the offline `demo-shelf2kumo`.
+  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Blocked:* default Storage bucket `shelf2kumo.firebasestorage.app` not created yet (owner action in console), plus Phase 2 Storage rules. Storage emulator now runs locally.
+  - Firebase project `shelf2kumo` (alias `dev`; `default` stays the offline `demo-shelf2kumo`), 2026-10-15: Blaze plan enabled (owner); Hosting site `shelf2kumo.web.app`; Firestore `(default)` Native in `asia-northeast1`, delete protection on, deny-all rules deployed; web app `Shelf2Kumo Web` (`1:37543586877:web:f20ddf2672882e31444e54`) with config in local `.env.local`; Storage bucket and Email/Password sign-in not yet enabled.
+  - Local emulators: all five (Auth, Functions, Firestore, Storage, Hosting) start with OpenJDK 21; seeded release renders through the production storefront path (404 before seed, 200 after).
 - [ ] Phase 1: identity and isolation.
 - [ ] Phase 2: private upload and adapter.
 - [ ] Phase 3: extraction jobs and automatic catalog.
@@ -573,6 +576,9 @@ Suggested agent handoff:
 | 2026-10-15 | Local shell `AMD_MODEL=DeepSeek-V4.1-Flash` is for the owner's own testing only | Owner confirmed: ignore it. `pnpm smoke:amd` now always uses the spec model unless `--model` is passed |
 | 2026-10-15 | Synthetic evaluation set `synthetic-v1` (5 Chrome-rendered scenes with ground truth) | No consented real photos yet; project-generated images have no license/consent issues. Not evidence of real-photo quality |
 | 2026-10-15 | Adapter reports the underlying network error code (e.g. `UND_ERR_CONNECT_TIMEOUT`) | Needed to diagnose the unstable path to the .cn endpoint; codes contain no secrets. **Follow-up (Phase 2):** consider a longer connect timeout via an undici dispatcher if regional checks show slow handshakes |
+| 2026-10-15 | Adapter accepts the hackathon `AMD_BASE_URL` | The endpoint is fixed by the hackathon; derive `<base>/v1/chat/completions`, keep the exact-URL override |
+| 2026-10-15 | Firestore `(default)` in `asia-northeast1`, delete protection on; `firebase.json` pins `firestore.location` | A rules deploy auto-created the database in `nam5`; it was empty and deleted immediately, then recreated in Tokyo. The pinned location prevents recurrence |
+| 2026-10-15 | OpenJDK 21 (Homebrew) for Firestore/Storage emulators; `pnpm seed:emulator` publishes the demo fixture into the emulator | Enables rules/isolation tests locally; seeding exercises the production storefront path |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

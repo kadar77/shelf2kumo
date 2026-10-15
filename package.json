@@ -17,7 +17,8 @@
     "emulators": "pnpm build && firebase emulators:start --only functions,hosting",
     "emulators:all": "pnpm build && firebase emulators:start",
     "smoke:amd": "tsx --env-file-if-exists=.env.local scripts/amd-smoke.ts",
-    "eval:images": "node scripts/render-test-images.mjs"
+    "eval:images": "node scripts/render-test-images.mjs",
+    "seed:emulator": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 tsx functions/scripts/seed-emulator.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

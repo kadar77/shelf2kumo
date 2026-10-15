@@ -16,11 +16,25 @@ const AmdConfigSchema = z.object({
 
 export type AmdConfig = z.infer<typeof AmdConfigSchema>;
 
-/** Reads adapter configuration from environment-like input. Throws without echoing secret values. */
+/**
+ * Chat completions URL from the hackathon-provided base URL (e.g. https://developer.amd.com.cn/radeon/api),
+ * accepting bases with or without a trailing /v1.
+ */
+export function chatCompletionsUrlFromBase(baseUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  return base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+}
+
+/**
+ * Reads adapter configuration from environment-like input. Throws without echoing secret values.
+ * URL precedence: AMD_CHAT_COMPLETIONS_URL (exact) → AMD_BASE_URL (derived) → confirmed default.
+ */
 export function loadAmdConfig(env: Record<string, string | undefined>): AmdConfig {
   const result = AmdConfigSchema.safeParse({
     apiKey: env.AMD_API_KEY ?? '',
-    url: env.AMD_CHAT_COMPLETIONS_URL || DEFAULT_AMD_CHAT_COMPLETIONS_URL,
+    url:
+      env.AMD_CHAT_COMPLETIONS_URL ||
+      (env.AMD_BASE_URL ? chatCompletionsUrlFromBase(env.AMD_BASE_URL) : DEFAULT_AMD_CHAT_COMPLETIONS_URL),
     model: env.AMD_MODEL || DEFAULT_AMD_MODEL,
     timeoutMs: env.AMD_REQUEST_TIMEOUT_MS ? Number(env.AMD_REQUEST_TIMEOUT_MS) : DEFAULT_AMD_TIMEOUT_MS,
   });

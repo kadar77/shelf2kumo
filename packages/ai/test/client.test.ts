@@ -38,6 +38,22 @@ describe('loadAmdConfig', () => {
     expect(() => loadAmdConfig({})).toThrow(/AMD_API_KEY is not set/);
   });
 
+  it('derives the endpoint from the hackathon AMD_BASE_URL', () => {
+    const expected = 'https://developer.amd.com.cn/radeon/api/v1/chat/completions';
+    for (const base of ['https://developer.amd.com.cn/radeon/api', 'https://developer.amd.com.cn/radeon/api/', 'https://developer.amd.com.cn/radeon/api/v1']) {
+      expect(loadAmdConfig({ AMD_API_KEY: 'k', AMD_BASE_URL: base }).url, base).toBe(expected);
+    }
+  });
+
+  it('prefers an exact AMD_CHAT_COMPLETIONS_URL over AMD_BASE_URL', () => {
+    const config = loadAmdConfig({
+      AMD_API_KEY: 'k',
+      AMD_BASE_URL: 'https://other.example/api',
+      AMD_CHAT_COMPLETIONS_URL: 'https://developer.amd.com.cn/radeon/api/v1/chat/completions',
+    });
+    expect(config.url).toBe('https://developer.amd.com.cn/radeon/api/v1/chat/completions');
+  });
+
   it('rejects a base URL without the full path', () => {
     expect(() => loadAmdConfig({ AMD_API_KEY: 'k', AMD_CHAT_COMPLETIONS_URL: 'https://x.example/v1' })).toThrow();
   });

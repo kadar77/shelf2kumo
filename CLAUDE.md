@@ -10,7 +10,7 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phase 0 is done locally, including the vision gate (P0-5, synthetic image). Remaining cloud checks (P0-2 dev deploy, P0-4 from region, P0-6) wait on Blaze billing, Firestore and Storage setup in project `shelf2kumo`. See spec §12. Phase 1 (identity, shop profile, isolation) is next.
+Phase 0 is done locally, including the vision gate (P0-5, synthetic image). Project `shelf2kumo` (alias `dev`) has Blaze, Firestore in `asia-northeast1` and a registered web app; the Storage bucket and Email/Password sign-in are still to be enabled in the console. Remaining cloud checks: P0-2 dev deploy, P0-4 from region, P0-6. See spec §12. Phase 1 (identity, shop profile, isolation) is next.
 
 The workspace currently reads the labeled demo fixture (`apps/web/src/workspace/fixtures.ts`); real data arrives with Phases 1–3.
 
@@ -38,7 +38,8 @@ pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
 | `pnpm check:secrets` | Scan `apps/web/dist` for AMD key/endpoint leaks (run after build) |
 | `pnpm verify` | All of the above in CI order |
 | `pnpm emulators` | Build, then Functions + Hosting emulators (Hosting at http://127.0.0.1:5050, demo project `demo-shelf2kumo`) |
-| `pnpm emulators:all` | Same plus Auth/Firestore/Storage emulators (requires Java) |
+| `pnpm emulators:all` | Same plus Auth/Firestore/Storage emulators (requires Java 11+; OpenJDK 21 via Homebrew is on PATH through `~/.zshrc`) |
+| `pnpm seed:emulator` | Publish the labeled demo shop into the running Firestore emulator (production storefront path) |
 | `pnpm smoke:amd [--image <path> --consented] [--model <name>]` | ONE paid AMD request; manual only, never in tests |
 | `pnpm eval:images` | Render the synthetic evaluation images (needs local Chrome) into `evaluation/images/synthetic/` |
 

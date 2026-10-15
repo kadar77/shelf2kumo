@@ -20,6 +20,8 @@ function workspaceDeepLinks(): Plugin {
 
 export default defineConfig({
   plugins: [react(), workspaceDeepLinks()],
+  // One .env.local at the repo root; Vite exposes only VITE_* variables to the client.
+  envDir: `${root}../..`,
   build: {
     // The storefront function reads the manifest to link the fingerprinted storefront stylesheet.
     manifest: true,

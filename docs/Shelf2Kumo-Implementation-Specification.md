@@ -572,7 +572,16 @@ Suggested agent handoff:
   - [x] P4-5 Profile form, item editor and theme picker cover every required field without chat (live picker check: ダーク + 明朝 reflected in preview).
   - Evidence: `pnpm test` 101 unit tests; `pnpm test:emulator` 68 tests (chat suite 18, fixture planner); live production walkthroughs at 360px with App Check debug token (deleted after use); test data deleted.
 - [ ] Live conversational action verification.
-- [ ] Phase 5: publish, public storefront and sharing.
+- [x] Phase 5: publish, public storefront and sharing (emulator-verified and live in production).
+  - [x] P5-1 Live (2026-10-15, real AMD): synthetic photo → 「ほうじ茶」 item created automatically → published with one change-summary confirmation, without visiting preview or approving the item.
+  - [x] P5-2 Live public page loaded with JavaScript disabled contains the shop, the item and its photo, with zero `<script>` tags; draft edits stay off the public page until the next publication (emulator).
+  - [x] P5-3 Stale (revision changed), wrong-hash, reused and expired confirmations return 409; the dialog then shows a refreshed summary; prepare returns 409 while extraction jobs are queued/running or items lack names.
+  - [x] P5-4 After unpublish: origin (direct function URL) 404 within 0.9 s; Hosting CDN edge 404 after 56 s (TTL 60 s); media 404; unknown routes 404; repeated unpublish is harmless.
+  - [x] P5-5 Public HTML contains no owner/shop IDs, storage paths or AI provenance fields; hostile names/descriptions are escaped; CSP present.
+  - [x] P5-6 Unpublishing shop A leaves shop B live (two owners).
+  - [x] P5-7 `/media/{slug}/{hash}.jpg` serves only photos referenced by the live release; draft-only or unknown hashes return 404.
+  - [x] P5-8 QR code decoded in the live walkthrough equals the public URL and the page renders at 360px; `/sitemap.xml` lists only live non-demo catalogs.
+  - Evidence: `pnpm test` 108 unit tests; `pnpm test:emulator` 79 tests (publish suite 11); emulator and production walkthroughs; production test data and App Check debug tokens deleted.
 - [ ] Phase 6: polish, release verification and demo.
 - [ ] Phase 7: optional shelf/menu expansion.
 - [ ] Workstream E: standalone evaluation (deferred until dataset availability).
@@ -640,6 +649,10 @@ Suggested agent handoff:
 | 2026-10-15 | Phase 4: themes are six AA-validated palettes for the Modern template (モダン, あたたかみ, すっきり, ボタニカル, モノトーン, ダーク) plus font/density/corners/image ratio; custom accents are darkened/lightened until AA | Theme proposals stay readable by construction; Natural/Botanical templates remain Should |
 | 2026-10-15 | Phase 4: photos sent in chat create extraction jobs and show job status in the conversation; chat history clearing deletes messages, blanks request texts, keeps actions (audit) and catalog | Spec §8 |
 | 2026-10-15 | Phase 4: assistant replies replace internal theme identifiers (e.g. 「warm」) with Japanese names | Observed live; owner-facing language only |
+| 2026-10-15 | Phase 5: releases store the allowlisted snapshot plus a server-only `media` map (rendition content hash → private Storage path); `/media` streams from it | Storage stays private; public URLs never reveal owner IDs or paths; unpublished media disappears with the pointer |
+| 2026-10-15 | Phase 5: snapshot hash = SHA-256 of canonical (key-sorted) JSON of the schema-parsed snapshot; publish rebuilds the draft inside the transaction and requires the same hash and `contentRevision` | The published content is exactly what the owner confirmed, independent of Firestore field order |
+| 2026-10-15 | Phase 5: prepare is blocked (409) by running extraction jobs and by items without names, with Japanese next steps | Spec §8/§9; no partial or nameless products go public |
+| 2026-10-15 | Phase 5: QR codes are generated client-side (`qrcode` library, SVG for display, PNG for download); `robots.txt` disallows `/app/` and `/api/` and points to the sitemap; the sitemap lists shop pages only | No extra service; product URLs can be added later |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

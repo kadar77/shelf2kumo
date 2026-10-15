@@ -25,6 +25,20 @@
         }
       },
       {
+        "source": "/media/**",
+        "function": {
+          "functionId": "storefront",
+          "region": "asia-northeast1"
+        }
+      },
+      {
+        "source": "/sitemap.xml",
+        "function": {
+          "functionId": "storefront",
+          "region": "asia-northeast1"
+        }
+      },
+      {
         "source": "/app{,/**}",
         "destination": "/app/index.html"
       }

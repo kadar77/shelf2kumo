@@ -1,11 +1,22 @@
-/** Persistent publication status and action. Publishing is wired up in Phase 5. */
-export function PublishBar({ live }: { live: boolean }) {
+import type { ShopWithId } from '../data/shops.ts';
+
+/** Persistent publication status and action (spec §9 Merchant UX). */
+export function PublishBar({ shop, onPublish, onShare }: { shop: ShopWithId; onPublish: () => void; onShare: () => void }) {
+  const live = shop.liveReleaseId !== null;
+  const pending = !live || shop.contentRevision !== shop.publishedRevision;
+  const status = live ? (pending ? '未公開の変更あり' : '公開中') : '未公開';
   return (
     <div className="ws-publish">
-      <span className="ws-status" role="status">
-        {live ? '公開中' : '未公開'}
-      </span>
-      <button type="button" className="ws-button ws-button-primary" disabled title="公開機能は準備中です">
+      {live ? (
+        <button type="button" className="ws-link-button ws-small" onClick={onShare}>
+          {status}・共有
+        </button>
+      ) : (
+        <span className="ws-status" role="status">
+          {status}
+        </span>
+      )}
+      <button type="button" className="ws-button ws-button-primary" onClick={onPublish} disabled={!pending}>
         公開する
       </button>
     </div>

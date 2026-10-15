@@ -27,6 +27,7 @@ export function toShop(id: string, data: DocumentData): ShopWithId {
     profileRevision: num(data.profileRevision),
     contentRevision: num(data.contentRevision),
     liveReleaseId: str(data.liveReleaseId),
+    publishedRevision: typeof data.publishedRevision === 'number' ? data.publishedRevision : null,
   };
 }
 

@@ -10,7 +10,7 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phases 0–4 are done, tested against emulators and live in production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`): photos become draft items via AMD extraction, and Japanese chat edits prices, hours, items and themes with diffs and undo. App Check is enforced on `/api`. See spec §12. Phase 5 (publish, public storefront and sharing) is next.
+Phases 0–5 are done, tested against emulators and live in production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`): photos become draft items via AMD extraction, Japanese chat edits the draft, and one confirmation publishes a server-rendered storefront with QR sharing and unpublish. App Check is enforced on `/api`. See spec §12. Phase 6 (polish, release verification and demo) is next.
 
 The workspace uses real Firebase Auth and Firestore. With `VITE_USE_EMULATORS=true` in `.env.local`, `pnpm dev` (Vite) and the Hosting emulator connect to the local emulators; run `pnpm emulators:all` alongside `pnpm dev`.
 

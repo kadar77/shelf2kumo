@@ -53,6 +53,7 @@ function newRequestId(): string {
 }
 
 interface Handlers {
+  onPublish: () => void;
   onShowPreview: () => void;
   onOpenCatalog: (section: 'items' | 'theme' | 'profile' | 'new-item') => void;
 }
@@ -77,7 +78,11 @@ function ActionCard({ action, shopId, onError, handlers }: { action: ActionWithI
     );
   }
   if (action.type === 'offerPublish') {
-    return <p className="ws-hint">公開は画面下の「公開する」から行えます（公開機能は次の開発段階で利用できます）。</p>;
+    return (
+      <button type="button" className="ws-button ws-button-small ws-button-primary" onClick={handlers.onPublish}>
+        公開内容を確認する
+      </button>
+    );
   }
   return (
     <div className="ws-action-card" data-state={action.state}>

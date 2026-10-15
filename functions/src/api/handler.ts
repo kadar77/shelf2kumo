@@ -3,6 +3,7 @@ import {
   CreateExtractionRequest,
   CreateItemRequest,
   CreateShopRequest,
+  PublishRequest,
   ReorderItemsRequest,
   SendChatRequest,
   UpdateItemRequest,
@@ -14,6 +15,7 @@ import type { ThemeService } from '../theme/service.ts';
 import type { ExtractionJobService } from '../extraction/jobs.ts';
 import type { ImageService } from '../images/service.ts';
 import type { ItemService } from '../items/service.ts';
+import type { PublishingService } from '../publishing/service.ts';
 import type { ShopService } from '../shops/service.ts';
 import { authenticate, type AuthDeps } from './auth.ts';
 import { HttpError, MAX_JSON_BODY_BYTES, errorResponse, parseBody, type ApiRequest, type ApiResponse } from './http.ts';
@@ -25,6 +27,7 @@ export interface ApiDeps extends AuthDeps {
   extractions: ExtractionJobService;
   chat: ChatService;
   themes: ThemeService;
+  publishing: PublishingService;
   log?: (message: string, data: Record<string, unknown>) => void;
 }
 
@@ -115,6 +118,27 @@ function routes(deps: ApiDeps): Route[] {
       pattern: new RegExp(`^/api/shops/${ID}/items/${ID}$`),
       handle: async ({ params, uid }) => {
         await deps.items.remove(uid, params[0] as string, params[1] as string);
+        return { status: 200, body: { ok: true } };
+      },
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/prepare-publication$`),
+      handle: async ({ params, uid }) => ({ status: 200, body: await deps.publishing.prepare(uid, params[0] as string) }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/publish$`),
+      handle: async ({ request, params, uid }) => ({
+        status: 200,
+        body: await deps.publishing.publish(uid, params[0] as string, parseBody(PublishRequest, request.body)),
+      }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/unpublish$`),
+      handle: async ({ params, uid }) => {
+        await deps.publishing.unpublish(uid, params[0] as string);
         return { status: 200, body: { ok: true } };
       },
     },

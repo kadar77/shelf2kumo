@@ -209,3 +209,28 @@ export async function renderStorefront(
     options,
   );
 }
+
+const xmlEscape = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+/** sitemap.xml for live, non-demo catalogs (shop pages). */
+export function renderSitemap(origin: string, slugs: string[]): RenderResult & { status: 200 } {
+  const base = origin.replace(/\/+$/, '');
+  const urls = slugs
+    .filter((slug) => Slug.safeParse(slug).success)
+    .map((slug) => `  <url><loc>${xmlEscape(`${base}${publicLinks.shop(slug)}`)}</loc></url>`)
+    .join('\n');
+  return {
+    status: 200,
+    html: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+    headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=0, s-maxage=300', 'X-Content-Type-Options': 'nosniff' },
+  };
+}
+
+/** Parses /media/:slug/:contentHash.jpg (published photos only). */
+export function matchMediaPath(pathname: string): { slug: string; contentHash: string } | null {
+  const match = /^\/media\/([^/]+)\/([a-f0-9]{64})\.jpg$/.exec(pathname);
+  if (!match) return null;
+  const slug = Slug.safeParse(match[1]);
+  return slug.success ? { slug: slug.data, contentHash: match[2] as string } : null;
+}

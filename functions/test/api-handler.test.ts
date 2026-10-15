@@ -4,6 +4,7 @@ import type { ApiRequest } from '../src/api/http.ts';
 import type { ExtractionJobService } from '../src/extraction/jobs.ts';
 import type { ChatService } from '../src/chat/service.ts';
 import type { ImageService } from '../src/images/service.ts';
+import type { PublishingService } from '../src/publishing/service.ts';
 import type { ThemeService } from '../src/theme/service.ts';
 import type { ItemService } from '../src/items/service.ts';
 import type { ShopService } from '../src/shops/service.ts';
@@ -52,6 +53,11 @@ function setup(overrides: Partial<ApiDeps> = {}) {
     clearHistory: vi.fn(async () => 3),
   };
   const themes: ThemeService = { update: vi.fn(async () => ({ revision: 1 })) };
+  const publishing: PublishingService = {
+    prepare: vi.fn(async () => ({ confirmationId: 'c1', snapshotHash: 'a'.repeat(64), summary: {} as never, expiresAt: '', url: 'https://x/s/abc' })),
+    publish: vi.fn(async () => ({ releaseId: 'r1', url: 'https://x/s/abc' })),
+    unpublish: vi.fn(async () => undefined),
+  };
   const deps: ApiDeps = {
     shops,
     images,
@@ -59,6 +65,7 @@ function setup(overrides: Partial<ApiDeps> = {}) {
     extractions,
     chat,
     themes,
+    publishing,
     verifyIdToken: vi.fn(async (token: string) => {
       if (token !== 'good-token') throw new Error('invalid');
       return { uid: 'uid-a' };
@@ -66,7 +73,7 @@ function setup(overrides: Partial<ApiDeps> = {}) {
     appCheckEnforced: false,
     ...overrides,
   };
-  return { handler: createApiHandler(deps), shops, images, items, extractions, chat, themes, deps };
+  return { handler: createApiHandler(deps), shops, images, items, extractions, chat, themes, publishing, deps };
 }
 
 describe('createApiHandler', () => {
@@ -182,6 +189,17 @@ describe('createApiHandler', () => {
     const invalidTheme = await handler(request({ method: 'PATCH', path: '/api/shops/shop1/theme', body: { expectedRevision: 0, tokens: { templateId: 'modern' } } }));
     expect(invalidTheme.status).toBe(400);
     expect(themes.update).not.toHaveBeenCalled();
+  });
+
+  it('routes publication commands and validates the publish request', async () => {
+    const { handler, publishing } = setup();
+    expect((await handler(request({ path: '/api/shops/shop1/prepare-publication', body: {} }))).status).toBe(200);
+    expect(publishing.prepare).toHaveBeenCalledWith('uid-a', 'shop1');
+    const ok = await handler(request({ path: '/api/shops/shop1/publish', body: { confirmationId: 'c1', snapshotHash: 'b'.repeat(64) } }));
+    expect(ok).toEqual({ status: 200, body: { releaseId: 'r1', url: 'https://x/s/abc' } });
+    expect((await handler(request({ path: '/api/shops/shop1/publish', body: { confirmationId: 'c1' } }))).status).toBe(400);
+    expect((await handler(request({ path: '/api/shops/shop1/unpublish', body: {} }))).status).toBe(200);
+    expect(publishing.unpublish).toHaveBeenCalledWith('uid-a', 'shop1');
   });
 
   it('distinguishes 404 routes from 405 methods', async () => {

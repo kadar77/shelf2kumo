@@ -24,6 +24,7 @@ import { firestoreImageService } from './images/service.ts';
 import { firebaseObjectStore } from './images/store.ts';
 import { firestoreItemService } from './items/service.ts';
 import { amdReachabilityCheck } from './ops/amd-check.ts';
+import { firestorePublishingService } from './publishing/service.ts';
 import { firestoreShopService } from './shops/service.ts';
 import { firestoreThemeService } from './theme/service.ts';
 import { STOREFRONT_CSS_HREF } from './storefront/config.ts';
@@ -83,6 +84,7 @@ function getApiHandler() {
     extractions: firestoreExtractionJobService(getFirestore()),
     chat: firestoreChatService(getFirestore(), firestoreExtractionJobService(getFirestore())),
     themes: firestoreThemeService(getFirestore()),
+    publishing: firestorePublishingService(getFirestore(), () => publicOrigin.value()),
     verifyIdToken: (token) => getAuth().verifyIdToken(token),
     verifyAppCheckToken: (token) => getAppCheck().verifyToken(token),
     appCheckEnforced: appCheckEnforce.value(),
@@ -111,6 +113,7 @@ export const storefront = onRequest({ memory: '256MiB' }, async (req, res) => {
       source: snapshotSource(),
       origin: publicOrigin.value(),
       cssHref: STOREFRONT_CSS_HREF,
+      readMedia: (path) => firebaseObjectStore().read(path),
       log: (message, data) => logger.error(message, data),
     },
   );

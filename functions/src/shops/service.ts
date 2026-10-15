@@ -48,6 +48,7 @@ export function firestoreShopService(db: Firestore): ShopService {
             profileRevision: 0,
             contentRevision: 0,
             liveReleaseId: null,
+            publishedRevision: null,
           };
           tx.create(reservationRef, { shopId: shopRef.id, createdAt: FieldValue.serverTimestamp() });
           tx.create(shopRef, { ...shop, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });

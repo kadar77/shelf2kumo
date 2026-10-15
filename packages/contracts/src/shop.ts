@@ -62,6 +62,8 @@ export interface ShopDoc {
   profileRevision: number;
   contentRevision: number;
   liveReleaseId: string | null;
+  /** contentRevision captured by the live release; differs from contentRevision when drafts are unpublished. */
+  publishedRevision: number | null;
 }
 
 /** Draft item fields relevant to the public snapshot. Draft names may be null until filled in. */

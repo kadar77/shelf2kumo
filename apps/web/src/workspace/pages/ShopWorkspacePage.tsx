@@ -5,6 +5,7 @@ import { CatalogPanel } from '../components/CatalogPanel.tsx';
 import { ChatPanel } from '../components/ChatPanel.tsx';
 import { PreviewPane } from '../components/PreviewPane.tsx';
 import { PublishBar } from '../components/PublishBar.tsx';
+import { PublishDialog } from '../components/PublishDialog.tsx';
 import { LoadingScreen } from '../auth/AuthProvider.tsx';
 import { useItems, useJobs } from '../data/catalog.ts';
 import { useActions, useMessages, useTheme } from '../data/chat.ts';
@@ -47,6 +48,8 @@ function Workspace({ shop }: { shop: ShopWithId }) {
   const messages = useMessages(shop.id);
   const actions = useActions(shop.id);
   const [draftImageId, setDraftImageId] = useState<string | null | undefined>(undefined);
+  const [publishMode, setPublishMode] = useState<'publish' | 'share' | null>(null);
+  const liveUrl = shop.liveReleaseId ? `${window.location.origin}/s/${shop.slug}` : null;
 
   const imagesById = useMemo(() => new Map(images.map((image) => [image.id, image])), [images]);
   const imageInfo = useMemo(() => {
@@ -66,6 +69,7 @@ function Workspace({ shop }: { shop: ShopWithId }) {
   );
 
   const handlers = {
+    onPublish: () => setPublishMode('publish'),
     onShowPreview: () => setActiveTab('preview'),
     onOpenCatalog: (section: 'items' | 'theme' | 'profile' | 'new-item') => {
       setActiveTab('catalog');
@@ -93,7 +97,7 @@ function Workspace({ shop }: { shop: ShopWithId }) {
         </Link>
         <span className="ws-topbar-shop">{shop.name}</span>
         <div className="ws-topbar-publish">
-          <PublishBar live={shop.liveReleaseId !== null} />
+          <PublishBar shop={shop} onPublish={() => setPublishMode('publish')} onShare={() => setPublishMode('share')} />
         </div>
       </header>
 
@@ -147,8 +151,10 @@ function Workspace({ shop }: { shop: ShopWithId }) {
         </section>
       </div>
 
+      {publishMode && <PublishDialog shopId={shop.id} mode={publishMode} liveUrl={liveUrl} onClose={() => setPublishMode(null)} />}
+
       <div className="ws-mobile-publish">
-        <PublishBar live={shop.liveReleaseId !== null} />
+        <PublishBar shop={shop} onPublish={() => setPublishMode('publish')} onShare={() => setPublishMode('share')} />
       </div>
     </div>
   );

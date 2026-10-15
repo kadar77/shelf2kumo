@@ -44,3 +44,12 @@ export const MapUrl = z
       return false;
     }
   }, 'Must be an https Google Maps link');
+
+/** A #rgb or #rrggbb color in any case, as owners or models may write it; normalize before use. */
+export const HexColorLoose = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+
+/** Normalizes #RGB / #RRGGBB to lowercase #rrggbb. */
+export function normalizeHex(color: string): string {
+  const hex = color.slice(1).toLowerCase();
+  return `#${hex.length === 3 ? [...hex].map((c) => c + c).join('') : hex}`;
+}

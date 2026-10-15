@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApiHandler, type ApiDeps } from '../src/api/handler.ts';
 import type { ApiRequest } from '../src/api/http.ts';
 import type { ExtractionJobService } from '../src/extraction/jobs.ts';
+import type { ChatService } from '../src/chat/service.ts';
 import type { ImageService } from '../src/images/service.ts';
+import type { ThemeService } from '../src/theme/service.ts';
 import type { ItemService } from '../src/items/service.ts';
 import type { ShopService } from '../src/shops/service.ts';
 import { isClaimableSlug, randomSlug } from '../src/shops/slug.ts';
@@ -42,11 +44,21 @@ function setup(overrides: Partial<ApiDeps> = {}) {
   const extractions: ExtractionJobService = {
     create: vi.fn(async () => ({ jobId: 'job1', state: 'queued' as const, duplicate: false })),
   };
+  const chat: ChatService = {
+    send: vi.fn(async () => ({ requestId: 'req-12345678', duplicate: false })),
+    applyAction: vi.fn(async () => undefined),
+    applyRequest: vi.fn(async () => undefined),
+    undo: vi.fn(async () => undefined),
+    clearHistory: vi.fn(async () => 3),
+  };
+  const themes: ThemeService = { update: vi.fn(async () => ({ revision: 1 })) };
   const deps: ApiDeps = {
     shops,
     images,
     items,
     extractions,
+    chat,
+    themes,
     verifyIdToken: vi.fn(async (token: string) => {
       if (token !== 'good-token') throw new Error('invalid');
       return { uid: 'uid-a' };
@@ -54,7 +66,7 @@ function setup(overrides: Partial<ApiDeps> = {}) {
     appCheckEnforced: false,
     ...overrides,
   };
-  return { handler: createApiHandler(deps), shops, images, items, extractions, deps };
+  return { handler: createApiHandler(deps), shops, images, items, extractions, chat, themes, deps };
 }
 
 describe('createApiHandler', () => {
@@ -147,6 +159,29 @@ describe('createApiHandler', () => {
       expect((await handler(request({ path: '/api/shops/shop1/items', body }))).status, JSON.stringify(body)).toBe(400);
     }
     expect(items.create).not.toHaveBeenCalled();
+  });
+
+  it('routes chat, actions and theme commands with validated input', async () => {
+    const { handler, chat, themes } = setup();
+    const sent = await handler(request({ path: '/api/shops/shop1/chat', body: { requestId: 'req-12345678', text: 'ほうじ茶を800円にして' } }));
+    expect(sent.status).toBe(202);
+    expect(chat.send).toHaveBeenCalledWith('uid-a', 'shop1', { requestId: 'req-12345678', text: 'ほうじ茶を800円にして' });
+
+    const both = await handler(request({ path: '/api/shops/shop1/chat', body: { requestId: 'req-12345678', text: 'x', imageId: 'img1' } }));
+    const tooLong = await handler(request({ path: '/api/shops/shop1/chat', body: { requestId: 'req-12345678', text: 'あ'.repeat(501) } }));
+    expect([both.status, tooLong.status]).toEqual([400, 400]);
+
+    expect((await handler(request({ path: '/api/shops/shop1/actions/act1/apply', body: {} }))).status).toBe(200);
+    expect(chat.applyAction).toHaveBeenCalledWith('uid-a', 'shop1', 'act1');
+    expect((await handler(request({ path: '/api/shops/shop1/actions/act1/undo', body: {} }))).status).toBe(200);
+    expect(chat.undo).toHaveBeenCalledWith('uid-a', 'shop1', 'act1');
+    expect((await handler(request({ path: '/api/shops/shop1/chat/req-12345678/apply', body: {} }))).status).toBe(200);
+    expect(chat.applyRequest).toHaveBeenCalledWith('uid-a', 'shop1', 'req-12345678');
+    expect(await handler(request({ method: 'DELETE', path: '/api/shops/shop1/conversation', body: {} }))).toEqual({ status: 200, body: { removed: 3 } });
+
+    const invalidTheme = await handler(request({ method: 'PATCH', path: '/api/shops/shop1/theme', body: { expectedRevision: 0, tokens: { templateId: 'modern' } } }));
+    expect(invalidTheme.status).toBe(400);
+    expect(themes.update).not.toHaveBeenCalled();
   });
 
   it('distinguishes 404 routes from 405 methods', async () => {

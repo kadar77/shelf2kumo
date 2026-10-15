@@ -29,3 +29,13 @@ export const ThemeTokens = z.strictObject({
   imageAspect: ImageAspect,
 });
 export type ThemeTokens = z.infer<typeof ThemeTokens>;
+
+export const UpdateThemeRequest = z.strictObject({
+  expectedRevision: z.number().int().nonnegative(),
+  tokens: ThemeTokens,
+});
+export type UpdateThemeRequest = z.infer<typeof UpdateThemeRequest>;
+
+export interface UpdateThemeResponse {
+  revision: number;
+}

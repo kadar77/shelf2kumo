@@ -4,9 +4,13 @@ import {
   CreateItemRequest,
   CreateShopRequest,
   ReorderItemsRequest,
+  SendChatRequest,
   UpdateItemRequest,
   UpdateShopRequest,
+  UpdateThemeRequest,
 } from '@shelf2kumo/contracts';
+import type { ChatService } from '../chat/service.ts';
+import type { ThemeService } from '../theme/service.ts';
 import type { ExtractionJobService } from '../extraction/jobs.ts';
 import type { ImageService } from '../images/service.ts';
 import type { ItemService } from '../items/service.ts';
@@ -19,6 +23,8 @@ export interface ApiDeps extends AuthDeps {
   images: ImageService;
   items: ItemService;
   extractions: ExtractionJobService;
+  chat: ChatService;
+  themes: ThemeService;
   log?: (message: string, data: Record<string, unknown>) => void;
 }
 
@@ -109,6 +115,51 @@ function routes(deps: ApiDeps): Route[] {
       pattern: new RegExp(`^/api/shops/${ID}/items/${ID}$`),
       handle: async ({ params, uid }) => {
         await deps.items.remove(uid, params[0] as string, params[1] as string);
+        return { status: 200, body: { ok: true } };
+      },
+    },
+    {
+      method: 'PATCH',
+      pattern: new RegExp(`^/api/shops/${ID}/theme$`),
+      handle: async ({ request, params, uid }) => ({
+        status: 200,
+        body: await deps.themes.update(uid, params[0] as string, parseBody(UpdateThemeRequest, request.body)),
+      }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/chat$`),
+      handle: async ({ request, params, uid }) => ({
+        status: 202,
+        body: await deps.chat.send(uid, params[0] as string, parseBody(SendChatRequest, request.body)),
+      }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/chat/${ID}/apply$`),
+      handle: async ({ params, uid }) => {
+        await deps.chat.applyRequest(uid, params[0] as string, params[1] as string);
+        return { status: 200, body: { ok: true } };
+      },
+    },
+    {
+      method: 'DELETE',
+      pattern: new RegExp(`^/api/shops/${ID}/conversation$`),
+      handle: async ({ params, uid }) => ({ status: 200, body: { removed: await deps.chat.clearHistory(uid, params[0] as string) } }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/actions/${ID}/apply$`),
+      handle: async ({ params, uid }) => {
+        await deps.chat.applyAction(uid, params[0] as string, params[1] as string);
+        return { status: 200, body: { ok: true } };
+      },
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/actions/${ID}/undo$`),
+      handle: async ({ params, uid }) => {
+        await deps.chat.undo(uid, params[0] as string, params[1] as string);
         return { status: 200, body: { ok: true } };
       },
     },

@@ -10,7 +10,7 @@ const projectId = process.env.GCLOUD_PROJECT ?? 'shelf2kumo';
 initializeApp({ credential: applicationDefault(), projectId });
 const db = getFirestore();
 const now = Timestamp.now();
-const probeOwner = '__index-probe__';
+const probeOwner = 'index-probe-owner';
 
 const queries: Array<[string, () => Promise<unknown>]> = [
   ['jobs: pending count per owner (API)', () => db.collectionGroup('jobs').where('ownerId', '==', probeOwner).where('state', 'in', ['queued', 'running']).count().get()],
@@ -18,6 +18,9 @@ const queries: Array<[string, () => Promise<unknown>]> = [
   ['jobs: expired leases (recovery)', () => q(db.collectionGroup('jobs').where('state', '==', 'running').where('leaseExpiresAt', '<', now))],
   ['jobs: stuck queue (recovery)', () => q(db.collectionGroup('jobs').where('state', '==', 'queued').where('createdAt', '<', now))],
   ['images: abandoned uploads (cleanup)', () => q(db.collectionGroup('images').where('state', 'in', ['allocated', 'rejected']).where('createdAt', '<', now))],
+  ['chatRequests: stuck requests (recovery)', () => q(db.collectionGroup('chatRequests').where('state', 'in', ['queued', 'running']).where('createdAt', '<', now))],
+  ['actions: proposed per request (chat apply)', () => q(db.collection('shops/index-probe/actions').where('requestId', '==', 'probe').where('state', '==', 'proposed'))],
+  ['chatRequests: text requests (clear history)', () => q(db.collection('shops/index-probe/chatRequests').where('kind', '==', 'text'))],
   ['shops: count per owner (API)', () => db.collection('shops').where('ownerId', '==', probeOwner).count().get()],
 ];
 

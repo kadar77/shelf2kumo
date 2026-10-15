@@ -1,5 +1,4 @@
 import { draftItemsForSnapshot, toStorefrontSnapshot, type SnapshotImageInfo, type StorefrontImage } from '@shelf2kumo/contracts';
-import { PRESETS } from '@shelf2kumo/themes';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { CatalogPanel } from '../components/CatalogPanel.tsx';
@@ -8,6 +7,7 @@ import { PreviewPane } from '../components/PreviewPane.tsx';
 import { PublishBar } from '../components/PublishBar.tsx';
 import { LoadingScreen } from '../auth/AuthProvider.tsx';
 import { useItems, useJobs } from '../data/catalog.ts';
+import { useActions, useMessages, useTheme } from '../data/chat.ts';
 import { useShop, type ShopWithId } from '../data/shops.ts';
 import { useRenditionUrls, useShopImages } from '../images/images.ts';
 import { NotFoundPage } from './NotFoundPage.tsx';
@@ -43,6 +43,10 @@ function Workspace({ shop }: { shop: ShopWithId }) {
   const items = useItems(shop.id);
   const images = useShopImages(shop.id);
   const jobs = useJobs(shop.id);
+  const theme = useTheme(shop.id);
+  const messages = useMessages(shop.id);
+  const actions = useActions(shop.id);
+  const [draftImageId, setDraftImageId] = useState<string | null | undefined>(undefined);
 
   const imagesById = useMemo(() => new Map(images.map((image) => [image.id, image])), [images]);
   const imageInfo = useMemo(() => {
@@ -55,11 +59,21 @@ function Workspace({ shop }: { shop: ShopWithId }) {
     return info;
   }, [images]);
 
-  // Saved themes arrive in Phase 4; the preview uses the same mapping as publishing.
+  // The preview uses the same mapping and saved theme that publishing will use.
   const snapshot = useMemo(
-    () => toStorefrontSnapshot({ shop, items: draftItemsForSnapshot(items ?? [], imageInfo), theme: PRESETS.modern }),
-    [shop, items, imageInfo],
+    () => toStorefrontSnapshot({ shop, items: draftItemsForSnapshot(items ?? [], imageInfo), theme: theme.tokens }),
+    [shop, items, imageInfo, theme.tokens],
   );
+
+  const handlers = {
+    onShowPreview: () => setActiveTab('preview'),
+    onOpenCatalog: (section: 'items' | 'theme' | 'profile' | 'new-item') => {
+      setActiveTab('catalog');
+      if (section === 'new-item') setDraftImageId(null);
+      const target = section === 'new-item' ? 'items' : section;
+      requestAnimationFrame(() => document.getElementById(`ws-section-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    },
+  };
 
   // Private renditions for the preview, keyed by content hash.
   const pathByHash = useMemo(() => {
@@ -108,10 +122,19 @@ function Workspace({ shop }: { shop: ShopWithId }) {
           className="ws-panel ws-catalog"
           data-active={activeTab === 'catalog'}
         >
-          <CatalogPanel shop={shop} items={items} images={images} imagesById={imagesById} jobs={jobs} />
+          <CatalogPanel
+            shop={shop}
+            items={items}
+            images={images}
+            imagesById={imagesById}
+            jobs={jobs}
+            theme={theme}
+            draftImageId={draftImageId}
+            onDraftChange={setDraftImageId}
+          />
         </section>
         <section id="ws-panel-chat" role="tabpanel" aria-labelledby="ws-tab-chat" className="ws-panel ws-chat" data-active={activeTab === 'chat'}>
-          <ChatPanel />
+          <ChatPanel shopId={shop.id} messages={messages} actions={actions} jobs={jobs} items={items} imagesById={imagesById} handlers={handlers} />
         </section>
         <section
           id="ws-panel-preview"

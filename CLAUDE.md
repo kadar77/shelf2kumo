@@ -10,7 +10,7 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phases 0–3 are done, tested against emulators and live in production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`): photos become draft items automatically via real AMD extraction. App Check is enforced on `/api`. See spec §12. Phase 4 (conversational management, themes and preview) is next.
+Phases 0–4 are done, tested against emulators and live in production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`): photos become draft items via AMD extraction, and Japanese chat edits prices, hours, items and themes with diffs and undo. App Check is enforced on `/api`. See spec §12. Phase 5 (publish, public storefront and sharing) is next.
 
 The workspace uses real Firebase Auth and Firestore. With `VITE_USE_EMULATORS=true` in `.env.local`, `pnpm dev` (Vite) and the Hosting emulator connect to the local emulators; run `pnpm emulators:all` alongside `pnpm dev`.
 
@@ -45,6 +45,7 @@ pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
 | `pnpm test:emulator` | Build, then run `tests/` (rules + API suites) inside `firebase emulators:exec` (needs Java) |
 | `pnpm smoke:amd [--image <path> --consented] [--model <name>]` | ONE paid AMD request; manual only, never in tests |
 | `pnpm try:extraction [--only <id>] [--model <name>]` | Run the extraction prompt on the evaluation images vs ground truth (one paid request per image; raw output to `evaluation/results/`) |
+| `pnpm try:chat --models <a,b> [--only <case>]` | Compare chat-planning models on `evaluation/chat-cases.json` (one paid request per case per model) |
 | `pnpm eval:images` | Render the synthetic evaluation images (needs local Chrome) into `evaluation/images/synthetic/` |
 
 Single package: `pnpm --filter @shelf2kumo/web test`, etc.
@@ -58,6 +59,7 @@ Layout notes:
 - Operator check of AMD from the deployed region: `curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://asia-northeast1-shelf2kumo.cloudfunctions.net/opsAmdCheck` (IAM-only).
 - Firebase: `default` alias = offline `demo-shelf2kumo` (emulators); the single production project `shelf2kumo` = alias `prod` (no dev project). The owner approved deploying directly to production: deploy with `pnpm deploy:prod` only after `pnpm verify` and `pnpm test:emulator` pass, then run `pnpm check:queries` and smoke-check the live site. For automated browser checks, create a temporary App Check debug token via the App Check API (reCAPTCHA may block headless browsers), inject it only into the test browser, and delete it afterwards. Clean up any test accounts/data created in production (`s2k-deploy-check-*@example.test` naming).
 - Any new composite or collection-group query needs an entry in `firestore.indexes.json` and in `functions/scripts/check-production-queries.ts`.
+- Chat planning uses `AMD_CHAT_MODELS` (ordered fallback chain). In the emulator, chat uses the labeled fixture planner keyed by `emulatorFixtures/chat-{sha256(text)}` (see `functions/src/chat/fixture.ts`).
 - In the emulator, extraction uses the labeled fixture extractor (`EXTRACTION_FIXTURES=true`); control outcomes per image via `emulatorFixtures/{renditionHash}` (see `functions/src/extraction/fixture.ts`).
 - Use the repo's pinned CLI (`node_modules/.bin/firebase`, via pnpm scripts) rather than a global `firebase`.
 

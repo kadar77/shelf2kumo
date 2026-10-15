@@ -22,7 +22,8 @@
     "test:emulator": "pnpm build && firebase emulators:exec --only auth,firestore,storage,functions,hosting --project demo-shelf2kumo 'pnpm --filter @shelf2kumo/tests test:emulator'",
     "deploy:prod": "firebase deploy --only firestore,storage,functions,hosting --project prod",
     "try:extraction": "tsx --env-file-if-exists=.env.local scripts/try-extraction.ts",
-    "check:queries": "tsx functions/scripts/check-production-queries.ts"
+    "check:queries": "tsx functions/scripts/check-production-queries.ts",
+    "try:chat": "tsx --env-file-if-exists=.env.local scripts/try-chat.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -1,4 +1,5 @@
 export * from './api.ts';
+export * from './chat.ts';
 export * from './common.ts';
 export * from './extraction.ts';
 export * from './images.ts';

@@ -14,7 +14,7 @@ const STAGE_LABELS: Record<UploadStage, string> = {
   processing: '写真を確認しています…',
 };
 
-function noticeAccepted(): boolean {
+export function noticeAccepted(): boolean {
   try {
     return localStorage.getItem(NOTICE_KEY) === 'accepted';
   } catch {
@@ -22,12 +22,45 @@ function noticeAccepted(): boolean {
   }
 }
 
-function rememberNotice() {
+export function rememberNotice() {
   try {
     localStorage.setItem(NOTICE_KEY, 'accepted');
   } catch {
     // Private mode or blocked storage: the notice simply shows again next time.
   }
+}
+
+/** Data-transfer notice shown before the first photo (spec §3). */
+export function PhotoNotice({ onCancel, onAccept }: { onCancel: () => void; onAccept: () => void }) {
+  const titleId = useId();
+  return (
+    <div className="ws-notice-box" role="dialog" aria-labelledby={titleId}>
+      <p id={titleId} className="ws-notice-title">
+        写真の取り扱いについて
+      </p>
+      <ul>
+        <li>写真は非公開で保存されます（保存先：米国のサーバー）。</li>
+        <li>商品情報の読み取りのため、写真は外部の AI サービス（AMD 提供、中国のサーバー）に送信されます。</li>
+        <li>人物や個人情報が写らないよう、商品だけを撮影してください。</li>
+        <li>位置情報などの撮影データは保存前に削除されます。</li>
+      </ul>
+      <div className="ws-notice-actions">
+        <button type="button" className="ws-button" onClick={onCancel}>
+          キャンセル
+        </button>
+        <button
+          type="button"
+          className="ws-button ws-button-primary"
+          onClick={() => {
+            rememberNotice();
+            onAccept();
+          }}
+        >
+          同意して写真を選ぶ
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const messageOf = (error: unknown, fallback: string) =>
@@ -135,7 +168,6 @@ export function PhotoSection({
   }
 
   function acceptNotice() {
-    rememberNotice();
     setShowNotice(false);
     inputRef.current?.click();
   }
@@ -171,31 +203,13 @@ export function PhotoSection({
   const visible = images.filter((image) => image.state !== 'allocated' || stage !== null).slice(0, MAX_ROWS);
 
   return (
-    <section aria-labelledby={headingId} className="ws-photos">
+    <section aria-labelledby={headingId} className="ws-photos" id="ws-section-photos">
       <h2 id={headingId} className="ws-panel-title">
         写真から商品を追加
       </h2>
 
       {showNotice ? (
-        <div className="ws-notice-box" role="dialog" aria-labelledby={`${headingId}-notice`}>
-          <p id={`${headingId}-notice`} className="ws-notice-title">
-            写真の取り扱いについて
-          </p>
-          <ul>
-            <li>写真は非公開で保存されます（保存先：米国のサーバー）。</li>
-            <li>商品情報の読み取りのため、写真は外部の AI サービス（AMD 提供、中国のサーバー）に送信されます。</li>
-            <li>人物や個人情報が写らないよう、商品だけを撮影してください。</li>
-            <li>位置情報などの撮影データは保存前に削除されます。</li>
-          </ul>
-          <div className="ws-notice-actions">
-            <button type="button" className="ws-button" onClick={() => setShowNotice(false)}>
-              キャンセル
-            </button>
-            <button type="button" className="ws-button ws-button-primary" onClick={acceptNotice}>
-              同意して写真を選ぶ
-            </button>
-          </div>
-        </div>
+        <PhotoNotice onCancel={() => setShowNotice(false)} onAccept={acceptNotice} />
       ) : (
         <button type="button" className="ws-button ws-button-primary" onClick={choosePhoto} disabled={stage !== null}>
           写真を追加

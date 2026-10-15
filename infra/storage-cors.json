@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://shelf2kumo.web.app", "https://shelf2kumo.firebaseapp.com"],
+    "method": ["GET"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]

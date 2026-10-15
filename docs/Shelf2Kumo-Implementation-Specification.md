@@ -529,20 +529,21 @@ Suggested agent handoff:
 - [x] AMD text-request evidence incorporated; image support explicitly unverified.
 - [ ] Phase 0: foundation and live gates (local scope complete; cloud checks blocked).
   - [x] P0-1 Clean install, build, typecheck, lint and 46 tests pass; Functions + Hosting emulators start. *Partial:* Firestore/Storage emulators blocked (Java not installed locally).
-  - [x] P0-2 Emulator: `/app/**` deep links load; `/s/demo` fixture renders via Hosting → `storefront` rewrite with fingerprinted CSS, cache and CSP headers; 404s correct; no horizontal overflow at 360px (storefront, product, workspace). *Blocked:* dev Firebase project not created.
+  - [x] P0-2 Emulator: `/app/**` deep links load; `/s/demo` fixture renders via Hosting → `storefront` rewrite with fingerprinted CSS, cache and CSP headers; 404s correct; no horizontal overflow at 360px (storefront, product, workspace). Production: deployed 2026-10-15; `/`, `/app/**`, `/api/health`, storefront 404s and headers verified live.
   - [x] P0-3 `pnpm check:secrets` passed on `apps/web/dist`, including a scan for the actual `AMD_API_KEY` value.
   - [ ] P0-4 *Local pass:* MiniCPM-V text request from a laptop, 2026-10-14T17:54:47Z, 1,016 ms, `finish_reason: stop`, returned model `self-dploy/MiniCPM-V-4.7-35B-A3B`, Japanese reply. *Blocked:* request from a deployed function in `asia-northeast1` (no Firebase project yet).
   - [x] P0-5 Vision compatibility gate **passed** (laptop): 2026-10-14T23:53:40Z, synthetic `s1-hojicha-pouch.jpg` (1200×900 JPEG, 132 KB) as a base64 `image_url` data URL; MiniCPM-V answered 「ほうじ茶」 (correct), 504 prompt tokens, 4,737 ms, `finish_reason: stop`. An earlier attempt at 23:48Z failed with `UND_ERR_CONNECT_TIMEOUT` during a network-path degradation (see §3). Synthetic image only; real-photo quality is not measured.
   - [ ] P0-6 Owner `getBlob()` of a private rendition. *Pending Phase 2:* bucket exists; needs owner-read Storage rules and bucket CORS for the workspace origin (CORS needs `gcloud`/`gsutil` or the Cloud Console). Storage emulator runs locally.
-  - Firebase project `shelf2kumo` (alias `dev`; `default` stays the offline `demo-shelf2kumo`), 2026-10-15: Blaze plan enabled (owner); Hosting site `shelf2kumo.web.app`; Firestore `(default)` Native in `asia-northeast1`, delete protection on, deny-all rules deployed; web app `Shelf2Kumo Web` (`1:37543586877:web:f20ddf2672882e31444e54`) with config in local `.env.local`; default Storage bucket `shelf2kumo.firebasestorage.app` in `us-west1` with deny-all rules deployed; Email/Password sign-in enabled (verified by probe).
+  - Firebase project `shelf2kumo` (alias `prod`, the single production project; `default` stays the offline `demo-shelf2kumo`), 2026-10-15: Blaze plan enabled (owner); Hosting site `shelf2kumo.web.app`; Firestore `(default)` Native in `asia-northeast1`, delete protection on, deny-all rules deployed; web app `Shelf2Kumo Web` (`1:37543586877:web:f20ddf2672882e31444e54`) with config in local `.env.local`; default Storage bucket `shelf2kumo.firebasestorage.app` in `us-west1` with deny-all rules deployed; Email/Password sign-in enabled (verified by probe).
   - Local emulators: all five (Auth, Functions, Firestore, Storage, Hosting) start with OpenJDK 21; seeded release renders through the production storefront path (404 before seed, 200 after).
-- [x] Phase 1: identity and isolation (emulator-verified; not yet deployed to `dev`).
+- [x] Phase 1: identity and isolation (emulator-verified and deployed to production `shelf2kumo.web.app`).
   - [x] P1-1 Owner A creates and reloads a shop; owner B and anonymous clients cannot read it (rules suite) or change it (API: 404 for another owner, 401 anonymous).
   - [x] P1-2 Body `ownerId` rejected by the strict contract (400); every direct client write denied by rules, including forged `ownerId`.
   - [x] P1-3 Two concurrent requests claiming the same slug: exactly one 200, one 409 `slug_unavailable`; reservation points at the winner.
   - [x] P1-4 Headless Chrome at 360×760 against the built app + emulators: login, wrong-password error, reset sent, weak-password error, sign-up, empty list, create shop, workspace, profile form, field error (focus moves to the field), save, preview, list. No horizontal overflow on any screen.
   - Evidence: `pnpm test` 58 unit tests; `pnpm test:emulator` 20 rules/API tests (Auth, Firestore, Functions, Hosting emulators); added to CI.
-  - Not done in Phase 1: App Check enforcement (`APP_CHECK_ENFORCE=false` until a reCAPTCHA Enterprise site key exists); verified-email gate (Should, applies to extraction/publishing); deploy of rules/functions/hosting to `dev` (awaiting owner go-ahead).
+  - Production check 2026-10-15 (headless Chrome, 360×760, App Check enforced): the same 11-step flow passed on `https://shelf2kumo.web.app`; test accounts and shops were deleted afterwards. A first attempt got one Cloud Run 401 on PATCH ~4 minutes after the service was created (public-invoker IAM still propagating); curl and the rerun passed.
+  - Not done in Phase 1: verified-email gate (Should; applies to extraction/publishing).
 - [ ] Phase 2: private upload and adapter.
 - [ ] Phase 3: extraction jobs and automatic catalog.
 - [ ] Phase 4: conversational management, themes and preview.
@@ -591,6 +592,10 @@ Suggested agent handoff:
 | 2026-10-15 | Phase 1: non-owners receive 404 (not 403) from shop commands | No shop-existence leak |
 | 2026-10-15 | Phase 1: App Check verified server-side when `APP_CHECK_ENFORCE=true`; client initializes it when `VITE_APP_CHECK_SITE_KEY` is set | Enforcement waits for a reCAPTCHA Enterprise key (owner console action) |
 | 2026-10-15 | Phase 1: the client connects to emulators only when `VITE_USE_EMULATORS=true` **and** served from localhost/127.0.0.1, using project `demo-shelf2kumo` | A production build can never talk to emulators even if the flag leaks |
+| 2026-10-15 | Single production project `shelf2kumo` (alias `prod`); no separate dev project | Owner decision for the hackathon; supersedes §5 "separate dev and prod projects". Emulators (`demo-shelf2kumo`) remain the pre-deploy test environment |
+| 2026-10-15 | App Check enforced on `/api` in production (`APP_CHECK_ENFORCE=true`), reCAPTCHA Enterprise score key limited to `shelf2kumo.web.app` and `shelf2kumo.firebaseapp.com`, min score 0.5 | Owner configured the key; Firestore/Storage/Auth App Check left in monitoring mode |
+| 2026-10-15 | Bucket CORS (`infra/storage-cors.json`): GET only, production origins only | Needed for authenticated `getBlob()` previews (P0-6) |
+| 2026-10-15 | Artifact Registry cleanup policy: delete function images older than 1 day (asia-northeast1) | Avoids accumulating image storage cost; required by the deploy CLI |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

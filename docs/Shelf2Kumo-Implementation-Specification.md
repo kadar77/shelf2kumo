@@ -61,7 +61,7 @@ These apply everywhere; later sections do not repeat them.
 | Cloud Storage for Firebase | Adopted | Image files; Firestore stores metadata only |
 | One React + Vite + TypeScript app (`apps/web`) | Adopted in v1.5 | Workspace SPA at `/app/**`; the same app's storefront components are server-rendered for all shops at `/s/**` |
 | Storefront rendered on request | Adopted in v1.4; Astro dropped in v1.5 | `react-dom/server` static rendering in a Cloud Function behind a Hosting rewrite, CDN-cached, zero client JS; replaces the v1.3 static build pipeline |
-| Region | Proposed: `asia-northeast1` (Tokyo) | Verify availability for Functions/Firestore/Storage in Phase 0 and record actual choices |
+| Region | Functions and Firestore: `asia-northeast1` (Tokyo). Storage bucket: `us-west1` | Storage chosen by owner for the Cloud Storage no-cost tier (US regions only). Trade-offs: phone uploads and storefront media cross the Pacific (media is CDN-cached), Tokyo functions read images cross-region (small egress at hackathon scale), and photos are stored in the US (add to the cross-border data notice) |
 | AMD endpoint | Confirmed; **fixed by the hackathon** (no alternative region) | Base `https://developer.amd.com.cn/radeon/api` (`AMD_BASE_URL`); calls go to `<base>/v1/chat/completions` |
 | Available models (hackathon key, 2026-10-15) | Listed by owner; capabilities unverified | DeepSeek-V4.1-Flash, DeepSeek-V4-Flash, DeepSeek-V4-Flash-Vision-Exp, Gemma-4-31B-IT, GLM-5.3-Flash, MiMo-V2.6-Flash, MinerU2.5-Pro, MiniCPM5-2B, MiniCPM-V-4.7-1B, MiniCPM-V-4.7-35B-A3B, Qwen3.8-27B, Qwen3.8-Flash-Next. Vision support is confirmed only for MiniCPM-V-4.7-35B-A3B |
 | AMD request model | Confirmed by sample | `MiniCPM-V-4.7-35B-A3B` |
@@ -533,8 +533,8 @@ Suggested agent handoff:
   - [x] P0-3 `pnpm check:secrets` passed on `apps/web/dist`, including a scan for the actual `AMD_API_KEY` value.
   - [ ] P0-4 *Local pass:* MiniCPM-V text request from a laptop, 2026-10-14T17:54:47Z, 1,016 ms, `finish_reason: stop`, returned model `self-dploy/MiniCPM-V-4.7-35B-A3B`, Japanese reply. *Blocked:* request from a deployed function in `asia-northeast1` (no Firebase project yet).
   - [x] P0-5 Vision compatibility gate **passed** (laptop): 2026-10-14T23:53:40Z, synthetic `s1-hojicha-pouch.jpg` (1200×900 JPEG, 132 KB) as a base64 `image_url` data URL; MiniCPM-V answered 「ほうじ茶」 (correct), 504 prompt tokens, 4,737 ms, `finish_reason: stop`. An earlier attempt at 23:48Z failed with `UND_ERR_CONNECT_TIMEOUT` during a network-path degradation (see §3). Synthetic image only; real-photo quality is not measured.
-  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Blocked:* default Storage bucket `shelf2kumo.firebasestorage.app` not created yet (owner action in console), plus Phase 2 Storage rules. Storage emulator now runs locally.
-  - Firebase project `shelf2kumo` (alias `dev`; `default` stays the offline `demo-shelf2kumo`), 2026-10-15: Blaze plan enabled (owner); Hosting site `shelf2kumo.web.app`; Firestore `(default)` Native in `asia-northeast1`, delete protection on, deny-all rules deployed; web app `Shelf2Kumo Web` (`1:37543586877:web:f20ddf2672882e31444e54`) with config in local `.env.local`; Storage bucket and Email/Password sign-in not yet enabled.
+  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Pending Phase 2:* bucket exists; needs owner-read Storage rules and bucket CORS for the workspace origin (CORS needs `gcloud`/`gsutil` or the Cloud Console). Storage emulator runs locally.
+  - Firebase project `shelf2kumo` (alias `dev`; `default` stays the offline `demo-shelf2kumo`), 2026-10-15: Blaze plan enabled (owner); Hosting site `shelf2kumo.web.app`; Firestore `(default)` Native in `asia-northeast1`, delete protection on, deny-all rules deployed; web app `Shelf2Kumo Web` (`1:37543586877:web:f20ddf2672882e31444e54`) with config in local `.env.local`; default Storage bucket `shelf2kumo.firebasestorage.app` in `us-west1` with deny-all rules deployed; Email/Password sign-in enabled (verified by probe).
   - Local emulators: all five (Auth, Functions, Firestore, Storage, Hosting) start with OpenJDK 21; seeded release renders through the production storefront path (404 before seed, 200 after).
 - [ ] Phase 1: identity and isolation.
 - [ ] Phase 2: private upload and adapter.
@@ -579,6 +579,7 @@ Suggested agent handoff:
 | 2026-10-15 | Adapter accepts the hackathon `AMD_BASE_URL` | The endpoint is fixed by the hackathon; derive `<base>/v1/chat/completions`, keep the exact-URL override |
 | 2026-10-15 | Firestore `(default)` in `asia-northeast1`, delete protection on; `firebase.json` pins `firestore.location` | A rules deploy auto-created the database in `nam5`; it was empty and deleted immediately, then recreated in Tokyo. The pinned location prevents recurrence |
 | 2026-10-15 | OpenJDK 21 (Homebrew) for Firestore/Storage emulators; `pnpm seed:emulator` publishes the demo fixture into the emulator | Enables rules/isolation tests locally; seeding exercises the production storefront path |
+| 2026-10-15 | Default Storage bucket in `us-west1`; deny-all Storage rules deployed immediately | Owner choice for the no-cost tier. Rules deployed so a console "test mode" bucket is never open. Revisit (`asia-northeast1`) if upload latency or data-residency review requires it |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

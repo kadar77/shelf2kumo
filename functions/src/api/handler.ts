@@ -1,10 +1,12 @@
-import { CreateShopRequest, UpdateShopRequest } from '@shelf2kumo/contracts';
+import { AllocateUploadRequest, CreateShopRequest, UpdateShopRequest } from '@shelf2kumo/contracts';
+import type { ImageService } from '../images/service.ts';
 import type { ShopService } from '../shops/service.ts';
 import { authenticate, type AuthDeps } from './auth.ts';
 import { HttpError, MAX_JSON_BODY_BYTES, errorResponse, parseBody, type ApiRequest, type ApiResponse } from './http.ts';
 
 export interface ApiDeps extends AuthDeps {
   shops: ShopService;
+  images: ImageService;
   log?: (message: string, data: Record<string, unknown>) => void;
 }
 
@@ -40,6 +42,22 @@ function routes(deps: ApiDeps): Route[] {
       handle: async ({ request, params, uid }) => ({
         status: 200,
         body: await deps.shops.update(uid, params[0] as string, parseBody(UpdateShopRequest, request.body)),
+      }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/uploads$`),
+      handle: async ({ request, params, uid }) => ({
+        status: 201,
+        body: await deps.images.allocate(uid, params[0] as string, parseBody(AllocateUploadRequest, request.body)),
+      }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/images/${ID}/process$`),
+      handle: async ({ params, uid }) => ({
+        status: 200,
+        body: await deps.images.process(uid, params[0] as string, params[1] as string),
       }),
     },
   ];

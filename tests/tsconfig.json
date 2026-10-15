@@ -1,7 +1,15 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "jsx": "react-jsx"
   },
-  "include": ["rules", "api", "support", "vitest.config.ts"]
+  "include": [
+    "rules",
+    "api",
+    "support",
+    "vitest.config.ts"
+  ]
 }

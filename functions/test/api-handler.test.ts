@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createApiHandler, type ApiDeps } from '../src/api/handler.ts';
 import type { ApiRequest } from '../src/api/http.ts';
+import type { ImageService } from '../src/images/service.ts';
 import type { ShopService } from '../src/shops/service.ts';
 import { isClaimableSlug, randomSlug } from '../src/shops/slug.ts';
 
@@ -26,8 +27,13 @@ function setup(overrides: Partial<ApiDeps> = {}) {
     create: vi.fn(async () => ({ shopId: 'shop1', slug: 'abcd2345' })),
     update: vi.fn(async () => ({ profileRevision: 1, slug: 'abcd2345' })),
   };
+  const images: ImageService = {
+    allocate: vi.fn(async () => ({ imageId: 'img1', uploadPath: 'owners/uid-a/shops/shop1/uploads/img1' })),
+    process: vi.fn(async () => ({ imageId: 'img1', state: 'processed' as const, width: 1600, height: 1200, contentHash: 'a'.repeat(64) })),
+  };
   const deps: ApiDeps = {
     shops,
+    images,
     verifyIdToken: vi.fn(async (token: string) => {
       if (token !== 'good-token') throw new Error('invalid');
       return { uid: 'uid-a' };
@@ -35,7 +41,7 @@ function setup(overrides: Partial<ApiDeps> = {}) {
     appCheckEnforced: false,
     ...overrides,
   };
-  return { handler: createApiHandler(deps), shops, deps };
+  return { handler: createApiHandler(deps), shops, images, deps };
 }
 
 describe('createApiHandler', () => {
@@ -85,6 +91,21 @@ describe('createApiHandler', () => {
 
     const empty = await handler(request({ method: 'PATCH', path: '/api/shops/shop1', body: { expectedRevision: 0, changes: {} } }));
     expect(empty.status).toBe(400);
+  });
+
+  it('routes upload allocation and processing with validated input', async () => {
+    const { handler, images } = setup();
+    const allocated = await handler(request({ path: '/api/shops/shop1/uploads', body: { contentType: 'image/jpeg', bytes: 1024 } }));
+    expect(allocated.status).toBe(201);
+    expect(images.allocate).toHaveBeenCalledWith('uid-a', 'shop1', { contentType: 'image/jpeg', bytes: 1024 });
+
+    const gif = await handler(request({ path: '/api/shops/shop1/uploads', body: { contentType: 'image/gif', bytes: 1024 } }));
+    const huge = await handler(request({ path: '/api/shops/shop1/uploads', body: { contentType: 'image/jpeg', bytes: 8 * 1024 * 1024 + 1 } }));
+    expect([gif.status, huge.status]).toEqual([400, 400]);
+
+    const processed = await handler(request({ path: '/api/shops/shop1/images/img1/process', body: {} }));
+    expect(processed.status).toBe(200);
+    expect(images.process).toHaveBeenCalledWith('uid-a', 'shop1', 'img1');
   });
 
   it('distinguishes 404 routes from 405 methods', async () => {

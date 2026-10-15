@@ -67,7 +67,7 @@ These apply everywhere; later sections do not repeat them.
 | AMD request model | Confirmed by sample | `MiniCPM-V-4.7-35B-A3B` |
 | Response text location | Confirmed by sample | `choices[0].message.content` |
 | Response model identity | Observed | May be `self-dploy/MiniCPM-V-4.7-35B-A3B`; do not require equality with request model |
-| Reachability/latency from Cloud Functions region | **Unverified; observed unstable** | From a laptop in Japan the path degraded for minutes (TCP connect 8–12 s, TLS failures) before recovering to ~0.1 s. Verify from the deployed region; budget retries and a user-visible "AI is slow" state |
+| Reachability/latency from Cloud Functions region | **Confirmed from `asia-northeast1`** (text: 4.4 s first call, then ~1.5 s); path observed unstable once from a laptop | Laptop path once degraded for minutes (TCP connect 8–12 s, TLS failures). Extraction calls take 15–30 s per image (likely hidden reasoning tokens); timeout raised to 60 s. Budget retries and a user-visible "AI is slow" state |
 | Image message format | **Confirmed** (one synthetic image) | `image_url` part with a base64 JPEG data URL is accepted and the image is consumed (≈490 image tokens). Size limits remain unverified |
 | JSON mode, schema mode, tools, streaming | Unverified; not required | Schema-validated JSON proposals |
 | Japanese action-planning reliability | **Unverified; known risk** | MiniCPM-V is a vision model; keep action set small, few-shot prompts, deterministic UI shortcuts. Text-only candidates for a separate chat model (e.g. DeepSeek-V4.1-Flash, Qwen3.8-Flash-Next, GLM-5.3-Flash) may be compared in Phase 4 |
@@ -331,6 +331,7 @@ Same-origin JSON APIs under `/api` with Firebase bearer tokens, App Check, serve
 | `POST /api/shops` | Validate profile, reserve random slug transactionally |
 | `PATCH /api/shops/:id` | Profile update with expected `profileRevision`; slug change only while unlocked |
 | `POST /api/shops/:id/uploads` | Allocate image ID/path and limits; browser uploads privately |
+| `POST /api/shops/:id/images/:imageId/process` | Validate the uploaded original by content (JPEG/PNG/WebP, ≤ 8 MiB, ≤ 20 MP), create the EXIF-free 1,600 px JPEG rendition, mark `processed` or `rejected` with Japanese guidance; idempotent |
 | `POST /api/shops/:id/extractions` | Validate processed upload, quota, idempotency; 202 with job ID |
 | `POST /api/shops/:id/items` | Create draft item (same contract as extraction) |
 | `PATCH /api/shops/:id/items/:itemId` | Validate fields; 409 on stale item revision |
@@ -527,13 +528,13 @@ Suggested agent handoff:
 
 - [x] Implementation specification created (v1.3) and revised (v1.4, v1.5).
 - [x] AMD text-request evidence incorporated; image support explicitly unverified.
-- [ ] Phase 0: foundation and live gates (local scope complete; cloud checks blocked).
+- [x] Phase 0: foundation and live gates.
   - [x] P0-1 Clean install, build, typecheck, lint and 46 tests pass; Functions + Hosting emulators start. *Partial:* Firestore/Storage emulators blocked (Java not installed locally).
   - [x] P0-2 Emulator: `/app/**` deep links load; `/s/demo` fixture renders via Hosting → `storefront` rewrite with fingerprinted CSS, cache and CSP headers; 404s correct; no horizontal overflow at 360px (storefront, product, workspace). Production: deployed 2026-10-15; `/`, `/app/**`, `/api/health`, storefront 404s and headers verified live.
   - [x] P0-3 `pnpm check:secrets` passed on `apps/web/dist`, including a scan for the actual `AMD_API_KEY` value.
-  - [ ] P0-4 *Local pass:* MiniCPM-V text request from a laptop, 2026-10-14T17:54:47Z, 1,016 ms, `finish_reason: stop`, returned model `self-dploy/MiniCPM-V-4.7-35B-A3B`, Japanese reply. *Blocked:* request from a deployed function in `asia-northeast1` (no Firebase project yet).
+  - [x] P0-4 Laptop: 2026-10-14T17:54:47Z, 1,016 ms. **Deployed region:** private `opsAmdCheck` in `asia-northeast1`, 2026-10-15T04:06:02Z: passed, 4,439 ms (first call), then 1,738 ms and 1,470 ms; returned model `self-dploy/MiniCPM-V-4.7-35B-A3B`; anonymous callers get 403.
   - [x] P0-5 Vision compatibility gate **passed** (laptop): 2026-10-14T23:53:40Z, synthetic `s1-hojicha-pouch.jpg` (1200×900 JPEG, 132 KB) as a base64 `image_url` data URL; MiniCPM-V answered 「ほうじ茶」 (correct), 504 prompt tokens, 4,737 ms, `finish_reason: stop`. An earlier attempt at 23:48Z failed with `UND_ERR_CONNECT_TIMEOUT` during a network-path degradation (see §3). Synthetic image only; real-photo quality is not measured.
-  - [ ] P0-6 Owner `getBlob()` of a private rendition. *Pending Phase 2:* bucket exists; needs owner-read Storage rules and bucket CORS for the workspace origin (CORS needs `gcloud`/`gsutil` or the Cloud Console). Storage emulator runs locally.
+  - [x] P0-6 Owner `getBlob()` of a private rendition: passed in the emulator and in production (2026-10-15, headless Chrome on `shelf2kumo.web.app`, thumbnail loaded as a `blob:` URL via bucket CORS); other owners and anonymous users are denied (Storage rules suite).
   - Firebase project `shelf2kumo` (alias `prod`, the single production project; `default` stays the offline `demo-shelf2kumo`), 2026-10-15: Blaze plan enabled (owner); Hosting site `shelf2kumo.web.app`; Firestore `(default)` Native in `asia-northeast1`, delete protection on, deny-all rules deployed; web app `Shelf2Kumo Web` (`1:37543586877:web:f20ddf2672882e31444e54`) with config in local `.env.local`; default Storage bucket `shelf2kumo.firebasestorage.app` in `us-west1` with deny-all rules deployed; Email/Password sign-in enabled (verified by probe).
   - Local emulators: all five (Auth, Functions, Firestore, Storage, Hosting) start with OpenJDK 21; seeded release renders through the production storefront path (404 before seed, 200 after).
 - [x] Phase 1: identity and isolation (emulator-verified and deployed to production `shelf2kumo.web.app`).
@@ -544,7 +545,13 @@ Suggested agent handoff:
   - Evidence: `pnpm test` 58 unit tests; `pnpm test:emulator` 20 rules/API tests (Auth, Firestore, Functions, Hosting emulators); added to CI.
   - Production check 2026-10-15 (headless Chrome, 360×760, App Check enforced): the same 11-step flow passed on `https://shelf2kumo.web.app`; test accounts and shops were deleted afterwards. A first attempt got one Cloud Run 401 on PATCH ~4 minutes after the service was created (public-invoker IAM still propagating); curl and the rerun passed.
   - Not done in Phase 1: verified-email gate (Should; applies to extraction/publishing).
-- [ ] Phase 2: private upload and adapter.
+- [x] Phase 2: private upload and AMD adapter (emulator-verified and deployed to production).
+  - [x] P2-1 Valid photos are resized in the browser (≤ 2,048 px JPEG), uploaded to an allocated private path and previewed privately; disguised non-images, unsupported formats, > 8 MiB and > 20 MP files fail with Japanese guidance; undecodable HEIC gets iPhone-specific advice (emulator + production walkthroughs at 360px).
+  - [x] P2-2 Storage rules: owner-only create-once uploads into allocated `allocated`-state paths (cross-service Firestore check), image types only, ≤ 8 MiB, no overwrite, no client reads of originals, owner-only rendition reads, no listing; other owners and anonymous denied (7 rules tests). Renditions carry no EXIF/GPS (unit test with GPS IFD + emulator API test).
+  - [x] P2-3 Adapter parses the confirmed response shape including the prefixed model identity (unit tests).
+  - [x] P2-4 Timeouts, non-JSON, prose-wrapped JSON, two fences, truncated (`finish_reason: length`), empty and schema-invalid outputs (string price, model currency, negative price) are controlled `ExtractionOutputError`/`AmdError` failures; one enclosing fence is accepted (unit tests).
+  - Live extraction smoke check (`pnpm try:extraction`, prompt `extraction-v1`, synthetic set): 5/5 schema-valid; names, prices and tax treatment correct on all 4 single-product images; shelf image `productCountEstimate` 3 (correct); 15–30 s per image; model wraps JSON in a ```json fence. Synthetic images only; not a quality claim.
+  - Evidence: `pnpm test` 80 unit tests; `pnpm test:emulator` 34 tests (Firestore rules 9, Storage rules 7, shop API 11, image API 7 incl. cleanup job). Production test data deleted after the walkthrough.
 - [ ] Phase 3: extraction jobs and automatic catalog.
 - [ ] Phase 4: conversational management, themes and preview.
 - [ ] Live conversational action verification.
@@ -596,6 +603,13 @@ Suggested agent handoff:
 | 2026-10-15 | App Check enforced on `/api` in production (`APP_CHECK_ENFORCE=true`), reCAPTCHA Enterprise score key limited to `shelf2kumo.web.app` and `shelf2kumo.firebaseapp.com`, min score 0.5 | Owner configured the key; Firestore/Storage/Auth App Check left in monitoring mode |
 | 2026-10-15 | Bucket CORS (`infra/storage-cors.json`): GET only, production origins only | Needed for authenticated `getBlob()` previews (P0-6) |
 | 2026-10-15 | Artifact Registry cleanup policy: delete function images older than 1 day (asia-northeast1) | Avoids accumulating image storage cost; required by the deploy CLI |
+| 2026-10-15 | Phase 2: image processing is a synchronous `POST …/images/:id/process` call in the `api` function (1 GiB, concurrency 16), not a Storage trigger | The bucket is in `us-west1`; Storage triggers must run in the bucket's region. Synchronous processing also gives the client an immediate result |
+| 2026-10-15 | Phase 2: the 1,600 px rendition is the AI input and the preview/publication source; originals stay private and are kept while referenced | Smaller AMD payloads; one EXIF-free derivative everywhere |
+| 2026-10-15 | Phase 2: Storage rules use cross-service Firestore lookups; Storage service agent granted `roles/firebaserules.firestoreServiceAgent` | Enforces "uploads only to allocated paths" in rules, not just in the API |
+| 2026-10-15 | Phase 2: scheduled `cleanupUploads` (every 6 h, Asia/Tokyo) deletes `allocated`/`rejected` image records and originals older than 24 h | Spec §6 retention; processed images are never touched by this job |
+| 2026-10-15 | Phase 2: AMD key in Secret Manager (`AMD_API_KEY` v1), bound only to `opsAmdCheck` so far; private (IAM-only) `opsAmdCheck` kept as an operator health check | P0-4 evidence from the deployed region without a public endpoint |
+| 2026-10-15 | Phase 2: `AMD_REQUEST_TIMEOUT_MS` 60,000 (was 45,000) | Observed 15–30 s per extraction |
+| 2026-10-15 | Phase 2: photo data-transfer notice shown before the first upload, acceptance remembered per browser (`localStorage`) | Spec §3 cross-border notice; per-viewer convenience only |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

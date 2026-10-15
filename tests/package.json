@@ -10,6 +10,7 @@
     "@firebase/rules-unit-testing": "6.0.0",
     "@shelf2kumo/contracts": "workspace:*",
     "firebase": "13.0.0",
-    "firebase-admin": "14.5.0"
+    "firebase-admin": "14.5.0",
+    "sharp": "0.35.5"
   }
 }

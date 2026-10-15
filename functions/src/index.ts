@@ -1,13 +1,19 @@
+import { loadAmdConfig } from '@shelf2kumo/ai';
 import { initializeApp } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
-import { defineBoolean, defineString } from 'firebase-functions/params';
+import { defineBoolean, defineSecret, defineString } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { createApiHandler } from './api/handler.ts';
 import type { ApiRequest, ApiResponse } from './api/http.ts';
+import { cleanupAbandonedUploads } from './images/cleanup.ts';
+import { firestoreImageService } from './images/service.ts';
+import { firebaseObjectStore } from './images/store.ts';
+import { amdReachabilityCheck } from './ops/amd-check.ts';
 import { firestoreShopService } from './shops/service.ts';
 import { STOREFRONT_CSS_HREF } from './storefront/config.ts';
 import { handleStorefrontRequest } from './storefront/handler.ts';
@@ -29,7 +35,21 @@ const appCheckEnforce = defineBoolean('APP_CHECK_ENFORCE', {
   description: 'Require a valid App Check token on /api requests',
 });
 
+/** AMD credentials and endpoint (spec §8). The key is bound only to functions that call AMD. */
+const amdApiKey = defineSecret('AMD_API_KEY');
+const amdBaseUrl = defineString('AMD_BASE_URL', { default: 'https://developer.amd.com.cn/radeon/api' });
+const amdModel = defineString('AMD_MODEL', { default: 'MiniCPM-V-4.7-35B-A3B' });
+const amdTimeoutMs = defineString('AMD_REQUEST_TIMEOUT_MS', { default: '60000' });
+
 initializeApp();
+
+const amdConfig = () =>
+  loadAmdConfig({
+    AMD_API_KEY: amdApiKey.value(),
+    AMD_BASE_URL: amdBaseUrl.value(),
+    AMD_MODEL: amdModel.value(),
+    AMD_REQUEST_TIMEOUT_MS: amdTimeoutMs.value(),
+  });
 
 let source: SnapshotSource | undefined;
 function snapshotSource(): SnapshotSource {
@@ -41,6 +61,7 @@ let apiHandler: ((request: ApiRequest) => Promise<ApiResponse>) | undefined;
 function getApiHandler() {
   apiHandler ??= createApiHandler({
     shops: firestoreShopService(getFirestore()),
+    images: firestoreImageService(getFirestore(), firebaseObjectStore()),
     verifyIdToken: (token) => getAuth().verifyIdToken(token),
     verifyAppCheckToken: (token) => getAppCheck().verifyToken(token),
     appCheckEnforced: appCheckEnforce.value(),
@@ -49,7 +70,8 @@ function getApiHandler() {
   return apiHandler;
 }
 
-export const api = onRequest({ memory: '256MiB' }, async (req, res) => {
+// Image processing (sharp) runs in the API; limit concurrency so decodes fit in memory.
+export const api = onRequest({ memory: '1GiB', concurrency: 16, timeoutSeconds: 60 }, async (req, res) => {
   const result = await getApiHandler()({
     method: req.method,
     path: req.path,
@@ -72,4 +94,21 @@ export const storefront = onRequest({ memory: '256MiB' }, async (req, res) => {
     },
   );
   res.status(result.status).set(result.headers).send(result.body);
+});
+
+/** Removes stale allocations and rejected uploads (spec §6 retention). */
+export const cleanupUploads = onSchedule({ schedule: 'every 6 hours', timeZone: 'Asia/Tokyo', memory: '256MiB' }, async () => {
+  const removed = await cleanupAbandonedUploads(getFirestore(), firebaseObjectStore());
+  logger.info('cleanupUploads finished', { removed });
+});
+
+/**
+ * Operator-only AMD reachability check (spec P0-4). Not public: callers need run.invoker IAM,
+ * e.g. `curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" <url>`.
+ */
+export const opsAmdCheck = onRequest({ invoker: 'private', secrets: [amdApiKey], memory: '256MiB', timeoutSeconds: 120 }, async (_req, res) => {
+  const evidence = await amdReachabilityCheck(amdConfig(), REGION);
+  logger.info('opsAmdCheck', evidence);
+  res.set('Cache-Control', 'no-store');
+  res.status(evidence.outcome === 'passed' ? 200 : 502).json(evidence);
 });

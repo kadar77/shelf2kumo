@@ -10,7 +10,7 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phases 0 and 1 are done, tested against emulators and deployed to production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`). App Check is enforced on `/api` in production. Remaining Phase 0 checks: P0-4 (AMD from the deployed region; needs the AMD secret and a worker, Phase 2) and P0-6 (owner `getBlob()`, Phase 2). See spec §12. Phase 2 (private upload and AMD adapter) is next.
+Phases 0–2 are done, tested against emulators and deployed to production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`). App Check is enforced on `/api`. The AMD key is in Secret Manager (`AMD_API_KEY`). See spec §12. Phase 3 (extraction jobs and automatic catalog) is next.
 
 The workspace uses real Firebase Auth and Firestore. With `VITE_USE_EMULATORS=true` in `.env.local`, `pnpm dev` (Vite) and the Hosting emulator connect to the local emulators; run `pnpm emulators:all` alongside `pnpm dev`.
 
@@ -43,6 +43,7 @@ pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
 | `pnpm deploy:prod` | Deploy Firestore/Storage rules, functions and hosting to production (`--project prod`) |
 | `pnpm test:emulator` | Build, then run `tests/` (rules + API suites) inside `firebase emulators:exec` (needs Java) |
 | `pnpm smoke:amd [--image <path> --consented] [--model <name>]` | ONE paid AMD request; manual only, never in tests |
+| `pnpm try:extraction [--only <id>] [--model <name>]` | Run the extraction prompt on the evaluation images vs ground truth (one paid request per image; raw output to `evaluation/results/`) |
 | `pnpm eval:images` | Render the synthetic evaluation images (needs local Chrome) into `evaluation/images/synthetic/` |
 
 Single package: `pnpm --filter @shelf2kumo/web test`, etc.
@@ -53,6 +54,7 @@ Layout notes:
 - Storefront CSS must stay scoped under `.sf`; the workspace preview imports it.
 - Non-secret function params live in `functions/.env.<projectId>` (copied into `deploy/` at build).
 - The owner's shell may export `AMD_MODEL` for unrelated testing; ignore it. `smoke:amd` always uses the spec model unless `--model` is passed.
+- Operator check of AMD from the deployed region: `curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://asia-northeast1-shelf2kumo.cloudfunctions.net/opsAmdCheck` (IAM-only).
 - Firebase: `default` alias = offline `demo-shelf2kumo` (emulators); the single production project `shelf2kumo` = alias `prod` (no dev project). The owner approved deploying directly to production: deploy with `pnpm deploy:prod` only after `pnpm verify` and `pnpm test:emulator` pass, then smoke-check the live site. Clean up any test accounts/data created in production.
 - Use the repo's pinned CLI (`node_modules/.bin/firebase`, via pnpm scripts) rather than a global `firebase`.
 

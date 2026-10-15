@@ -1,9 +1,33 @@
 rules_version = '2';
 
-// Phase 0 baseline: deny everything. Phase 2 adds owner uploads to allocated paths and owner reads
-// of their own renditions (spec §6 Authorization). Storage is never publicly readable.
+// Private photo storage (spec §6). Nothing is publicly readable; published media is served by the
+// storefront function. Admin SDK writes (renditions) bypass these rules.
 service firebase.storage {
   match /b/{bucket}/o {
+    function imageDoc(shopId, imageId) {
+      return firestore.get(/databases/(default)/documents/shops/$(shopId)/images/$(imageId));
+    }
+
+    // Originals: the owner may create each allocated path exactly once; nobody reads them client-side.
+    match /owners/{uid}/shops/{shopId}/uploads/{imageId} {
+      allow create: if request.auth != null
+        && resource == null
+        && request.auth.uid == uid
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && firestore.exists(/databases/(default)/documents/shops/$(shopId)/images/$(imageId))
+        && imageDoc(shopId, imageId).data.ownerId == uid
+        && imageDoc(shopId, imageId).data.state == 'allocated'
+        && imageDoc(shopId, imageId).data.uploadPath == 'owners/' + uid + '/shops/' + shopId + '/uploads/' + imageId;
+      allow read, update, delete: if false;
+    }
+
+    // Renditions (EXIF-free JPEG) are written by the server; only the owner may fetch them for previews.
+    match /owners/{uid}/shops/{shopId}/renditions/{file} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

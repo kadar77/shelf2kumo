@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const DEFAULT_AMD_CHAT_COMPLETIONS_URL = 'https://developer.amd.com.cn/radeon/api/v1/chat/completions';
 export const DEFAULT_AMD_MODEL = 'MiniCPM-V-4.7-35B-A3B';
-export const DEFAULT_AMD_TIMEOUT_MS = 45_000;
+export const DEFAULT_AMD_TIMEOUT_MS = 60_000;
 
 const AmdConfigSchema = z.object({
   apiKey: z.string().min(1, 'AMD_API_KEY is not set'),

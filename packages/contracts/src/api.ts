@@ -10,6 +10,8 @@ export const ApiErrorCode = z.enum([
   'revision_conflict',
   /** Requested slug is reserved, taken, or locked after first publication. */
   'slug_unavailable',
+  /** An uploaded photo failed validation; the message explains what to do. */
+  'image_rejected',
   'conflict',
   'quota_exceeded',
   'payload_too_large',

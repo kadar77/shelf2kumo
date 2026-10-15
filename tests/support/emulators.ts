@@ -2,6 +2,9 @@
 export const PROJECT_ID = process.env.GCLOUD_PROJECT ?? 'demo-shelf2kumo';
 export const FIRESTORE_HOST = process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080';
 export const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099';
+export const STORAGE_HOST = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+/** Default bucket the Functions emulator uses for the demo project (FIREBASE_CONFIG.storageBucket). */
+export const STORAGE_BUCKET = `${process.env.GCLOUD_PROJECT ?? 'demo-shelf2kumo'}.appspot.com`;
 /** API calls go through the Hosting emulator so the /api rewrite is exercised too. */
 export const HOSTING_ORIGIN = process.env.HOSTING_ORIGIN ?? 'http://127.0.0.1:5050';
 

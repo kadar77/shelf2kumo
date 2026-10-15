@@ -6,7 +6,7 @@ Shelf2Kumo helps small Japanese shops put their products online from a phone. Th
 
 ## Status
 
-Phases 0–2 are complete and live at https://shelf2kumo.web.app. The implementation baseline is [docs/Shelf2Kumo-Implementation-Specification.md](docs/Shelf2Kumo-Implementation-Specification.md); progress is tracked in its §12.
+Phases 0–3 are complete and live at https://shelf2kumo.web.app. The implementation baseline is [docs/Shelf2Kumo-Implementation-Specification.md](docs/Shelf2Kumo-Implementation-Specification.md); progress is tracked in its §12.
 
 | Item | Status |
 |---|---|
@@ -15,6 +15,7 @@ Phases 0–2 are complete and live at https://shelf2kumo.web.app. The implementa
 | Workspace shell, storefront renderer, emulator routing | Working |
 | Sign-up/sign-in/reset, shop creation and profile editing, owner isolation | Done (Phase 1); live at https://shelf2kumo.web.app/app/ |
 | Private photo upload, server validation, EXIF-free renditions, private previews | Done (Phase 2); live |
+| Photo → automatic draft product (AMD extraction jobs, quotas, retries), item editing/reorder/delete | Done (Phase 3); live with real inference |
 | Firebase project `shelf2kumo` (production) | Blaze; Firestore (Tokyo), Storage (us-west1), Auth, App Check enforced on the API |
 
 ## Architecture at a glance

@@ -1,5 +1,15 @@
-import { AllocateUploadRequest, CreateShopRequest, UpdateShopRequest } from '@shelf2kumo/contracts';
+import {
+  AllocateUploadRequest,
+  CreateExtractionRequest,
+  CreateItemRequest,
+  CreateShopRequest,
+  ReorderItemsRequest,
+  UpdateItemRequest,
+  UpdateShopRequest,
+} from '@shelf2kumo/contracts';
+import type { ExtractionJobService } from '../extraction/jobs.ts';
 import type { ImageService } from '../images/service.ts';
+import type { ItemService } from '../items/service.ts';
 import type { ShopService } from '../shops/service.ts';
 import { authenticate, type AuthDeps } from './auth.ts';
 import { HttpError, MAX_JSON_BODY_BYTES, errorResponse, parseBody, type ApiRequest, type ApiResponse } from './http.ts';
@@ -7,6 +17,8 @@ import { HttpError, MAX_JSON_BODY_BYTES, errorResponse, parseBody, type ApiReque
 export interface ApiDeps extends AuthDeps {
   shops: ShopService;
   images: ImageService;
+  items: ItemService;
+  extractions: ExtractionJobService;
   log?: (message: string, data: Record<string, unknown>) => void;
 }
 
@@ -59,6 +71,46 @@ function routes(deps: ApiDeps): Route[] {
         status: 200,
         body: await deps.images.process(uid, params[0] as string, params[1] as string),
       }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/extractions$`),
+      handle: async ({ request, params, uid }) => ({
+        status: 202,
+        body: await deps.extractions.create(uid, params[0] as string, parseBody(CreateExtractionRequest, request.body)),
+      }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/items$`),
+      handle: async ({ request, params, uid }) => ({
+        status: 201,
+        body: await deps.items.create(uid, params[0] as string, parseBody(CreateItemRequest, request.body)),
+      }),
+    },
+    {
+      method: 'POST',
+      pattern: new RegExp(`^/api/shops/${ID}/items/reorder$`),
+      handle: async ({ request, params, uid }) => {
+        await deps.items.reorder(uid, params[0] as string, parseBody(ReorderItemsRequest, request.body));
+        return { status: 200, body: { ok: true } };
+      },
+    },
+    {
+      method: 'PATCH',
+      pattern: new RegExp(`^/api/shops/${ID}/items/${ID}$`),
+      handle: async ({ request, params, uid }) => ({
+        status: 200,
+        body: await deps.items.update(uid, params[0] as string, params[1] as string, parseBody(UpdateItemRequest, request.body)),
+      }),
+    },
+    {
+      method: 'DELETE',
+      pattern: new RegExp(`^/api/shops/${ID}/items/${ID}$`),
+      handle: async ({ params, uid }) => {
+        await deps.items.remove(uid, params[0] as string, params[1] as string);
+        return { status: 200, body: { ok: true } };
+      },
     },
   ];
 }

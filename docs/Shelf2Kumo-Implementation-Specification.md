@@ -336,6 +336,7 @@ Same-origin JSON APIs under `/api` with Firebase bearer tokens, App Check, serve
 | `POST /api/shops/:id/items` | Create draft item (same contract as extraction) |
 | `PATCH /api/shops/:id/items/:itemId` | Validate fields; 409 on stale item revision |
 | `DELETE /api/shops/:id/items/:itemId` | Always allowed; removal appears in the next publish summary; live release unaffected until republished |
+| `POST /api/shops/:id/items/reorder` | Set display order from the exact current item set; 409 if the set changed |
 | `PATCH /api/shops/:id/theme` | Validate template/tokens and contrast; save draft |
 | `POST /api/shops/:id/chat` | Persist message/attachments, create chat request; 202 with request ID |
 | `POST /api/shops/:id/actions/:actionId/apply` | Apply a proposed action once with revision checks |
@@ -552,7 +553,17 @@ Suggested agent handoff:
   - [x] P2-4 Timeouts, non-JSON, prose-wrapped JSON, two fences, truncated (`finish_reason: length`), empty and schema-invalid outputs (string price, model currency, negative price) are controlled `ExtractionOutputError`/`AmdError` failures; one enclosing fence is accepted (unit tests).
   - Live extraction smoke check (`pnpm try:extraction`, prompt `extraction-v1`, synthetic set): 5/5 schema-valid; names, prices and tax treatment correct on all 4 single-product images; shelf image `productCountEstimate` 3 (correct); 15–30 s per image; model wraps JSON in a ```json fence. Synthetic images only; not a quality claim.
   - Evidence: `pnpm test` 80 unit tests; `pnpm test:emulator` 34 tests (Firestore rules 9, Storage rules 7, shop API 11, image API 7 incl. cleanup job). Production test data deleted after the walkthrough.
-- [ ] Phase 3: extraction jobs and automatic catalog.
+- [x] Phase 3: extraction jobs and automatic catalog (emulator-verified and live in production with real AMD inference).
+  - [x] P3-1 A processed photo automatically starts a job; the result is saved as an unpublished, editable item (ID = job ID, `sourceJobId`, uncertainty flags) with no review step; `contentRevision` increments and nothing is published.
+  - [x] P3-2 Duplicate requests (concurrent, or the same photo uploaded twice) return the same job and create one item; with the trigger plus two direct workers racing, exactly one provider call happens and one worker finalizes; a redelivered job never recreates an item the owner removed.
+  - [x] P3-3 Expired leases become `failed: lease_expired` with a Japanese retry message and release the owner lock (recovery job); the daily allowance (20) holds under concurrent requests, enforced both by the API pre-check (429) and the worker's transactional reservation.
+  - [x] P3-4 A multi-product photo creates no item (`outcome: multiple_products`, count shown) and the UI asks to retake one product or add manually; empty output is `nothing_found`.
+  - [x] P3-5 Failed or unclear extractions offer manual entry with the photo attached; reload preserves items and job state (walkthrough).
+  - [x] P3-6 Three consecutive edits of item A while an extraction for another photo completes all return 200 (per-item revisions; `contentRevision` has no expected-value check).
+  - Retry policy verified: one retry after a timeout succeeds (attempt 2); authentication errors are not retried (attempt 1); two invalid outputs fail as `ai_invalid_output`; an explicit user retry creates a linked job (`retryOf`).
+  - Production (2026-10-15, real MiniCPM-V): synthetic tea-pouch photo → item 「ほうじ茶 864円（税込）」 created automatically ~21 s after upload, then edit/preview/reload/manual add/reorder/delete passed; synthetic three-jar shelf photo → no item, 「複数の商品が写っています（約 3 点）…」 (~37 s). Headless checks used a temporary App Check debug token (deleted afterwards; reCAPTCHA scored the automated browser below 0.5). Test accounts and data deleted.
+  - Found in production only: the pending-jobs count (collection-group `ownerId` + `state in`) needed a composite index the emulator does not enforce; added, and `pnpm check:queries` now verifies every composite/collection-group query against production after deploys.
+  - Evidence: `pnpm test` 84 unit tests; `pnpm test:emulator` 50 tests (catalog suite 16) using the labeled fixture extractor (no paid calls); 360px emulator walkthrough: upload → automatic item → price edit → preview with private photo → reload → manual add → reorder → delete, no overflow.
 - [ ] Phase 4: conversational management, themes and preview.
 - [ ] Live conversational action verification.
 - [ ] Phase 5: publish, public storefront and sharing.
@@ -610,6 +621,13 @@ Suggested agent handoff:
 | 2026-10-15 | Phase 2: AMD key in Secret Manager (`AMD_API_KEY` v1), bound only to `opsAmdCheck` so far; private (IAM-only) `opsAmdCheck` kept as an operator health check | P0-4 evidence from the deployed region without a public endpoint |
 | 2026-10-15 | Phase 2: `AMD_REQUEST_TIMEOUT_MS` 60,000 (was 45,000) | Observed 15–30 s per extraction |
 | 2026-10-15 | Phase 2: photo data-transfer notice shown before the first upload, acceptance remembered per browser (`localStorage`) | Spec §3 cross-border notice; per-viewer convenience only |
+| 2026-10-15 | Phase 3: one active extraction per owner via a server-only `extractionLocks/{ownerId}` lease; further jobs wait as `queued` and the finishing worker (or the 5-minute recovery job) "kicks" the owner's oldest queued job | Spec §8 limit without rejecting uploads; recovery covers lost wake-ups |
+| 2026-10-15 | Phase 3: job ID = hash of owner, shop, rendition content hash, prompt version, intent (and `retryOf`); item ID = job ID | Idempotency and redelivery safety by construction |
+| 2026-10-15 | Phase 3: invalid model output counts as retryable once (max two provider attempts); quota reserved per attempt inside the job's lease transaction | Spec §8 "optional one explicit retry"; provider calls never exceed the allowance |
+| 2026-10-15 | Phase 3: emulator-only fixture extractor (`EXTRACTION_FIXTURES=true` + `FUNCTIONS_EMULATOR`), behavior keyed by rendition hash in `emulatorFixtures/`; jobs record `model: fixture` and the UI shows a フィクスチャ badge | Deterministic tests without paid calls; never active in deployed functions |
+| 2026-10-15 | Phase 3: Firestore-triggered `extractionWorker` with automatic retries off, 300 s timeout, max 5 instances | Redelivery cannot multiply provider calls; leases and recovery handle crashes |
+| 2026-10-15 | Post-deploy `pnpm check:queries` (read-only, ADC) runs all composite/collection-group queries with `limit(1)` against production | The emulator does not enforce indexes; a missing index caused a production 500 that tests could not catch |
+| 2026-10-15 | Automated production browser checks use a temporary App Check debug token created via the App Check API and deleted right after | reCAPTCHA Enterprise may score headless browsers below 0.5; real users are unaffected |
 | — | Cross-border data handling for the .cn endpoint | **Open:** confirm notice wording and APPI review before production |
 | — | Plan B vision model | **Open:** choose only if the vision gate fails |
 

@@ -1,35 +1,35 @@
-import type { StorefrontSnapshot } from '@shelf2kumo/contracts';
-import { formatPrice } from '../../storefront/format.ts';
+import { useState } from 'react';
+import type { ItemWithId, JobWithId } from '../data/catalog.ts';
 import type { ShopWithId } from '../data/shops.ts';
+import type { ImageWithId } from '../images/images.ts';
+import { ItemList } from './ItemList.tsx';
 import { PhotoSection } from './PhotoSection.tsx';
 import { ShopProfileForm } from './ShopProfileForm.tsx';
 
-export function CatalogPanel({ shop, snapshot }: { shop: ShopWithId; snapshot: StorefrontSnapshot }) {
+interface Props {
+  shop: ShopWithId;
+  items: ItemWithId[] | null;
+  images: ImageWithId[];
+  imagesById: Map<string, ImageWithId>;
+  jobs: JobWithId[];
+}
+
+export function CatalogPanel({ shop, items, images, imagesById, jobs }: Props) {
+  // undefined: closed; null: new item without a photo; string: new item for that photo.
+  const [draftImageId, setDraftImageId] = useState<string | null | undefined>(undefined);
+
   return (
     <div className="ws-panel-inner ws-catalog-inner">
-      <PhotoSection shopId={shop.id} />
-
+      <PhotoSection shopId={shop.id} images={images} jobs={jobs} onManualAdd={(imageId) => setDraftImageId(imageId)} />
+      <ItemList
+        shopId={shop.id}
+        items={items}
+        imagesById={imagesById}
+        draftImageId={draftImageId}
+        onDraftDone={() => setDraftImageId(undefined)}
+        onStartDraft={() => setDraftImageId(null)}
+      />
       <ShopProfileForm key={shop.id} shop={shop} />
-
-      <section aria-labelledby="ws-items-title">
-        <h2 id="ws-items-title" className="ws-panel-title">
-          商品（{snapshot.items.length}件）
-        </h2>
-        {snapshot.items.length === 0 ? (
-          <p className="ws-muted ws-small">商品はまだありません。</p>
-        ) : (
-          <ul className="ws-catalog-list">
-            {snapshot.items.map((item) => (
-              <li key={item.id} className="ws-catalog-item">
-                <span className="ws-catalog-name">{item.name}</span>
-                <span className={item.priceJpy === null ? 'ws-catalog-price ws-flag' : 'ws-catalog-price'}>
-                  {formatPrice(item.priceJpy, item.taxTreatment)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Description, ItemName, MapUrl, ShortText, Slug } from './common.ts';
-import type { StorefrontItem, StorefrontSnapshot } from './storefront.ts';
+import type { ItemDoc } from './items.ts';
+import type { StorefrontImage, StorefrontItem, StorefrontSnapshot } from './storefront.ts';
 import type { ThemeTokens } from './theme.ts';
 
 /** Upper bound on shops per owner (abuse guard; multiple shops per owner are allowed). */
@@ -92,4 +93,38 @@ export function toStorefrontSnapshot(input: {
     theme: input.theme,
     items: input.items.flatMap((item) => (item.name ? [{ ...item, name: item.name }] : [])),
   };
+}
+
+/** Processed image facts needed to show an item's photo in a snapshot. */
+export interface SnapshotImageInfo {
+  contentHash: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Maps saved draft items (in display order) to snapshot items. Items whose image is not processed
+ * (or missing) are shown without a photo rather than with a broken one.
+ */
+export function draftItemsForSnapshot(
+  items: Array<ItemDoc & { id: string }>,
+  images: ReadonlyMap<string, SnapshotImageInfo>,
+): SnapshotDraftItem[] {
+  return [...items]
+    .sort((a, b) => a.order - b.order)
+    .map((item) => {
+      const info = item.imageId ? images.get(item.imageId) : undefined;
+      const image: StorefrontImage | null = info
+        ? { contentHash: info.contentHash, width: info.width, height: info.height, alt: item.name ?? '' }
+        : null;
+      return {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        priceJpy: item.priceJpy,
+        taxTreatment: item.taxTreatment,
+        image,
+      };
+    });
 }

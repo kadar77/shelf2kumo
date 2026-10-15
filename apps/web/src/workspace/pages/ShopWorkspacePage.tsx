@@ -1,4 +1,4 @@
-import { toStorefrontSnapshot } from '@shelf2kumo/contracts';
+import { draftItemsForSnapshot, toStorefrontSnapshot, type SnapshotImageInfo, type StorefrontImage } from '@shelf2kumo/contracts';
 import { PRESETS } from '@shelf2kumo/themes';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -7,7 +7,9 @@ import { ChatPanel } from '../components/ChatPanel.tsx';
 import { PreviewPane } from '../components/PreviewPane.tsx';
 import { PublishBar } from '../components/PublishBar.tsx';
 import { LoadingScreen } from '../auth/AuthProvider.tsx';
+import { useItems, useJobs } from '../data/catalog.ts';
 import { useShop, type ShopWithId } from '../data/shops.ts';
+import { useRenditionUrls, useShopImages } from '../images/images.ts';
 import { NotFoundPage } from './NotFoundPage.tsx';
 
 type Tab = 'chat' | 'catalog' | 'preview';
@@ -38,8 +40,36 @@ export function ShopWorkspacePage() {
 
 function Workspace({ shop }: { shop: ShopWithId }) {
   const [activeTab, setActiveTab] = useState<Tab>('chat');
-  // Items arrive in Phase 3 and saved themes in Phase 4; until then the preview shows the profile.
-  const snapshot = useMemo(() => toStorefrontSnapshot({ shop, items: [], theme: PRESETS.modern }), [shop]);
+  const items = useItems(shop.id);
+  const images = useShopImages(shop.id);
+  const jobs = useJobs(shop.id);
+
+  const imagesById = useMemo(() => new Map(images.map((image) => [image.id, image])), [images]);
+  const imageInfo = useMemo(() => {
+    const info = new Map<string, SnapshotImageInfo>();
+    for (const image of images) {
+      if (image.state === 'processed' && image.contentHash && image.width && image.height) {
+        info.set(image.id, { contentHash: image.contentHash, width: image.width, height: image.height });
+      }
+    }
+    return info;
+  }, [images]);
+
+  // Saved themes arrive in Phase 4; the preview uses the same mapping as publishing.
+  const snapshot = useMemo(
+    () => toStorefrontSnapshot({ shop, items: draftItemsForSnapshot(items ?? [], imageInfo), theme: PRESETS.modern }),
+    [shop, items, imageInfo],
+  );
+
+  // Private renditions for the preview, keyed by content hash.
+  const pathByHash = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const image of images) if (image.contentHash && image.renditionPath) map.set(image.contentHash, image.renditionPath);
+    return map;
+  }, [images]);
+  const previewPaths = snapshot.items.flatMap((item) => (item.image ? [pathByHash.get(item.image.contentHash) ?? ''] : [])).filter(Boolean);
+  const urls = useRenditionUrls(previewPaths);
+  const resolveImage = (image: StorefrontImage) => urls.get(pathByHash.get(image.contentHash) ?? '') ?? null;
 
   return (
     <div className="ws">
@@ -78,7 +108,7 @@ function Workspace({ shop }: { shop: ShopWithId }) {
           className="ws-panel ws-catalog"
           data-active={activeTab === 'catalog'}
         >
-          <CatalogPanel shop={shop} snapshot={snapshot} />
+          <CatalogPanel shop={shop} items={items} images={images} imagesById={imagesById} jobs={jobs} />
         </section>
         <section id="ws-panel-chat" role="tabpanel" aria-labelledby="ws-tab-chat" className="ws-panel ws-chat" data-active={activeTab === 'chat'}>
           <ChatPanel />
@@ -90,7 +120,7 @@ function Workspace({ shop }: { shop: ShopWithId }) {
           className="ws-panel ws-preview"
           data-active={activeTab === 'preview'}
         >
-          <PreviewPane snapshot={snapshot} />
+          <PreviewPane snapshot={snapshot} resolveImage={resolveImage} />
         </section>
       </div>
 

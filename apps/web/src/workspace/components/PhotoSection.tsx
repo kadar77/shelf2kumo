@@ -1,10 +1,12 @@
 import { IMAGE_REJECT_MESSAGES } from '@shelf2kumo/contracts';
 import { useId, useRef, useState, type ChangeEvent } from 'react';
 import { ApiRequestError } from '../api.ts';
+import type { JobWithId } from '../data/catalog.ts';
 import { PrepareUploadError } from '../images/prepareUpload.ts';
-import { uploadPhoto, useRenditionUrl, useShopImages, type ImageWithId, type UploadStage } from '../images/images.ts';
+import { requestExtraction, uploadPhoto, useRenditionUrl, type ImageWithId, type UploadStage } from '../images/images.ts';
 
 const NOTICE_KEY = 's2k:photo-notice-v1';
+const MAX_ROWS = 8;
 
 const STAGE_LABELS: Record<UploadStage, string> = {
   preparing: '写真を準備しています…',
@@ -28,36 +30,103 @@ function rememberNotice() {
   }
 }
 
-function Thumbnail({ image }: { image: ImageWithId }) {
-  const url = useRenditionUrl(image.state === 'processed' ? image.renditionPath : null);
-  if (image.state === 'rejected') {
+const messageOf = (error: unknown, fallback: string) =>
+  error instanceof PrepareUploadError || error instanceof ApiRequestError ? error.message : fallback;
+
+interface RowProps {
+  image: ImageWithId;
+  job: JobWithId | undefined;
+  onManualAdd: (imageId: string) => void;
+  onRetry: (image: ImageWithId, job: JobWithId) => void;
+}
+
+function JobStatus({ image, job, onManualAdd, onRetry }: RowProps) {
+  const manual = (
+    <button type="button" className="ws-link-button ws-small" onClick={() => onManualAdd(image.id)}>
+      手動で追加
+    </button>
+  );
+  if (image.state === 'rejected') return <p className="ws-row-text ws-error-text">{IMAGE_REJECT_MESSAGES[image.rejectReason ?? 'corrupt']}</p>;
+  if (image.state === 'allocated') return <p className="ws-row-text">アップロード中…</p>;
+  if (!job) {
     return (
-      <li className="ws-photo ws-photo-rejected">
-        <span>{IMAGE_REJECT_MESSAGES[image.rejectReason ?? 'corrupt']}</span>
-      </li>
+      <div className="ws-row-text">
+        <p>読み取りを開始していません。</p>
+        <div className="ws-row-actions">
+          <button type="button" className="ws-link-button ws-small" onClick={() => onRetry(image, { id: '' } as JobWithId)}>
+            読み取る
+          </button>
+          {manual}
+        </div>
+      </div>
     );
   }
-  if (image.state === 'allocated') {
+  if (job.state === 'queued') return <p className="ws-row-text">順番待ち…</p>;
+  if (job.state === 'running') return <p className="ws-row-text">商品情報を読み取っています…（15〜30 秒ほど）</p>;
+  if (job.state === 'failed') {
     return (
-      <li className="ws-photo ws-photo-pending">
-        <span>処理中…</span>
-      </li>
+      <div className="ws-row-text">
+        <p className="ws-error-text">{job.error?.message ?? '読み取れませんでした。'}</p>
+        <div className="ws-row-actions">
+          {job.error?.retryable && (
+            <button type="button" className="ws-link-button ws-small" onClick={() => onRetry(image, job)}>
+              もう一度読み取る
+            </button>
+          )}
+          {manual}
+        </div>
+      </div>
     );
   }
+  if (job.outcome === 'item_created') {
+    return (
+      <p className="ws-row-text ws-success-text">
+        商品を追加しました{job.model === 'fixture' && <span className="ws-badge">フィクスチャ</span>}
+      </p>
+    );
+  }
+  const text =
+    job.outcome === 'multiple_products'
+      ? `複数の商品が写っています（約 ${job.productCountEstimate ?? 2} 点）。1 つの商品だけが写るように撮り直すか、手動で追加してください。`
+      : '商品情報を読み取れませんでした。手動で追加できます。';
   return (
-    <li className="ws-photo">
-      {url ? <img src={url} alt="アップロードした写真" width={image.width ?? undefined} height={image.height ?? undefined} /> : <span>読み込み中…</span>}
+    <div className="ws-row-text">
+      <p>{text}</p>
+      <div className="ws-row-actions">{manual}</div>
+    </div>
+  );
+}
+
+function PhotoRow(props: RowProps) {
+  const url = useRenditionUrl(props.image.state === 'processed' ? props.image.renditionPath : null);
+  return (
+    <li className="ws-photo-row">
+      <div className="ws-photo-thumb">{url ? <img src={url} alt="アップロードした写真" /> : <span aria-hidden="true">…</span>}</div>
+      <JobStatus {...props} />
     </li>
   );
 }
 
-export function PhotoSection({ shopId }: { shopId: string }) {
+export function PhotoSection({
+  shopId,
+  images,
+  jobs,
+  onManualAdd,
+}: {
+  shopId: string;
+  images: ImageWithId[];
+  jobs: JobWithId[];
+  onManualAdd: (imageId: string) => void;
+}) {
   const headingId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const images = useShopImages(shopId);
   const [showNotice, setShowNotice] = useState(false);
   const [stage, setStage] = useState<UploadStage | null>(null);
   const [message, setMessage] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
+
+  // Latest job per image (jobs are newest first).
+  const jobByImage = new Map<string, JobWithId>();
+  for (const job of jobs) if (!jobByImage.has(job.imageId)) jobByImage.set(job.imageId, job);
 
   function choosePhoto() {
     setMessage(null);
@@ -71,30 +140,40 @@ export function PhotoSection({ shopId }: { shopId: string }) {
     inputRef.current?.click();
   }
 
+  async function startExtraction(imageId: string, retryOfJobId?: string) {
+    try {
+      await requestExtraction(shopId, imageId, retryOfJobId);
+      return true;
+    } catch (error) {
+      setMessage({ kind: 'error', text: messageOf(error, '読み取りを開始できませんでした。手動で追加できます。') });
+      return false;
+    }
+  }
+
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    let imageId: string;
     try {
-      await uploadPhoto(shopId, file, setStage);
-      setMessage({ kind: 'success', text: '写真を保存しました。' });
+      imageId = (await uploadPhoto(shopId, file, setStage)).imageId;
     } catch (error) {
-      const text =
-        error instanceof PrepareUploadError || error instanceof ApiRequestError
-          ? error.message
-          : 'アップロードできませんでした。通信状況を確認して、もう一度お試しください。';
-      setMessage({ kind: 'error', text });
-    } finally {
+      setMessage({ kind: 'error', text: messageOf(error, 'アップロードできませんでした。通信状況を確認して、もう一度お試しください。') });
       setStage(null);
+      return;
+    }
+    setStage(null);
+    if (await startExtraction(imageId)) {
+      setMessage({ kind: 'success', text: '写真を保存しました。商品情報を読み取っています。' });
     }
   }
 
-  const visible = images.filter((image) => image.state !== 'allocated' || stage !== null);
+  const visible = images.filter((image) => image.state !== 'allocated' || stage !== null).slice(0, MAX_ROWS);
 
   return (
     <section aria-labelledby={headingId} className="ws-photos">
       <h2 id={headingId} className="ws-panel-title">
-        写真
+        写真から商品を追加
       </h2>
 
       {showNotice ? (
@@ -136,13 +215,19 @@ export function PhotoSection({ shopId }: { shopId: string }) {
       )}
 
       {visible.length > 0 ? (
-        <ul className="ws-photo-grid">
+        <ul className="ws-photo-rows" aria-live="polite">
           {visible.map((image) => (
-            <Thumbnail key={image.id} image={image} />
+            <PhotoRow
+              key={image.id}
+              image={image}
+              job={jobByImage.get(image.id)}
+              onManualAdd={onManualAdd}
+              onRetry={(target, job) => void startExtraction(target.id, job.id || undefined)}
+            />
           ))}
         </ul>
       ) : (
-        <p className="ws-muted ws-small">商品の写真を追加すると、ここに表示されます。商品の自動作成は次の開発段階で利用できます。</p>
+        <p className="ws-muted ws-small">1 枚に 1 つの商品が写るように撮影してください。写真を追加すると、商品が自動で作成されます。</p>
       )}
     </section>
   );

@@ -64,6 +64,14 @@ for (const name of await readdir(here)) {
   if (name.startsWith('.env')) await copyFile(`${here}${name}`, `${outDir}/${name}`);
 }
 
+// Emulator-only placeholder so local runs never fetch the real secret (deploys ignore *.local files).
+// Extraction uses labeled fixtures in the emulator; a developer can supply functions/.secret.local instead.
+if (!(await readdir(here)).includes('.secret.local')) {
+  await writeFile(`${outDir}/.secret.local`, 'AMD_API_KEY=emulator-placeholder-not-a-key\n');
+} else {
+  await copyFile(`${here}.secret.local`, `${outDir}/.secret.local`);
+}
+
 // The Firebase CLI discovers functions via the SDK in <source>/node_modules. Link the workspace
 // install for local discovery and emulators; deploys ignore node_modules and install from package.json.
 await symlink('../node_modules', `${outDir}/node_modules`, 'dir');

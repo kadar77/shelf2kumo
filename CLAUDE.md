@@ -10,7 +10,7 @@ The single source of truth is [docs/Shelf2Kumo-Implementation-Specification.md](
 
 ## Current state
 
-Phases 0–2 are done, tested against emulators and deployed to production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`). App Check is enforced on `/api`. The AMD key is in Secret Manager (`AMD_API_KEY`). See spec §12. Phase 3 (extraction jobs and automatic catalog) is next.
+Phases 0–3 are done, tested against emulators and live in production (`https://shelf2kumo.web.app`, project `shelf2kumo`, alias `prod`): photos become draft items automatically via real AMD extraction. App Check is enforced on `/api`. See spec §12. Phase 4 (conversational management, themes and preview) is next.
 
 The workspace uses real Firebase Auth and Firestore. With `VITE_USE_EMULATORS=true` in `.env.local`, `pnpm dev` (Vite) and the Hosting emulator connect to the local emulators; run `pnpm emulators:all` alongside `pnpm dev`.
 
@@ -41,6 +41,7 @@ pnpm workspace (Node ≥ 22.22 locally; Functions run on `nodejs22`).
 | `pnpm emulators:all` | Same plus Auth/Firestore/Storage emulators (requires Java 11+; OpenJDK 21 via Homebrew is on PATH through `~/.zshrc`) |
 | `pnpm seed:emulator` | Publish the labeled demo shop into the running Firestore emulator (production storefront path) |
 | `pnpm deploy:prod` | Deploy Firestore/Storage rules, functions and hosting to production (`--project prod`) |
+| `pnpm check:queries` | After deploys: run every composite/collection-group query against production (read-only; catches missing indexes the emulator ignores) |
 | `pnpm test:emulator` | Build, then run `tests/` (rules + API suites) inside `firebase emulators:exec` (needs Java) |
 | `pnpm smoke:amd [--image <path> --consented] [--model <name>]` | ONE paid AMD request; manual only, never in tests |
 | `pnpm try:extraction [--only <id>] [--model <name>]` | Run the extraction prompt on the evaluation images vs ground truth (one paid request per image; raw output to `evaluation/results/`) |
@@ -55,7 +56,9 @@ Layout notes:
 - Non-secret function params live in `functions/.env.<projectId>` (copied into `deploy/` at build).
 - The owner's shell may export `AMD_MODEL` for unrelated testing; ignore it. `smoke:amd` always uses the spec model unless `--model` is passed.
 - Operator check of AMD from the deployed region: `curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://asia-northeast1-shelf2kumo.cloudfunctions.net/opsAmdCheck` (IAM-only).
-- Firebase: `default` alias = offline `demo-shelf2kumo` (emulators); the single production project `shelf2kumo` = alias `prod` (no dev project). The owner approved deploying directly to production: deploy with `pnpm deploy:prod` only after `pnpm verify` and `pnpm test:emulator` pass, then smoke-check the live site. Clean up any test accounts/data created in production.
+- Firebase: `default` alias = offline `demo-shelf2kumo` (emulators); the single production project `shelf2kumo` = alias `prod` (no dev project). The owner approved deploying directly to production: deploy with `pnpm deploy:prod` only after `pnpm verify` and `pnpm test:emulator` pass, then run `pnpm check:queries` and smoke-check the live site. For automated browser checks, create a temporary App Check debug token via the App Check API (reCAPTCHA may block headless browsers), inject it only into the test browser, and delete it afterwards. Clean up any test accounts/data created in production (`s2k-deploy-check-*@example.test` naming).
+- Any new composite or collection-group query needs an entry in `firestore.indexes.json` and in `functions/scripts/check-production-queries.ts`.
+- In the emulator, extraction uses the labeled fixture extractor (`EXTRACTION_FIXTURES=true`); control outcomes per image via `emulatorFixtures/{renditionHash}` (see `functions/src/extraction/fixture.ts`).
 - Use the repo's pinned CLI (`node_modules/.bin/firebase`, via pnpm scripts) rather than a global `firebase`.
 
 ## Non-negotiable rules

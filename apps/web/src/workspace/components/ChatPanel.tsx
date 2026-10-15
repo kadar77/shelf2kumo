@@ -6,7 +6,7 @@ export function ChatPanel() {
           こんにちは！お店について教えてください。商品の写真を送ると、自動で商品ページの下書きを作成します。
         </li>
       </ol>
-      <p className="ws-notice">チャットと写真のアップロードは開発中です。現在はデモ表示です。</p>
+      <p className="ws-notice">チャットでの編集は次の開発段階で利用できます。写真の追加と商品の編集は「カタログ」からできます。</p>
       <form className="ws-composer" onSubmit={(event) => event.preventDefault()}>
         <label htmlFor="ws-composer-input" className="ws-visually-hidden">
           メッセージ

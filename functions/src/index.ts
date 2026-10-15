@@ -1,18 +1,24 @@
-import { loadAmdConfig } from '@shelf2kumo/ai';
+import { extract, loadAmdConfig } from '@shelf2kumo/ai';
 import { initializeApp } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineBoolean, defineSecret, defineString } from 'firebase-functions/params';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { createApiHandler } from './api/handler.ts';
+import { fixtureExtractor, useExtractionFixtures } from './extraction/fixture.ts';
+import { firestoreExtractionJobService } from './extraction/jobs.ts';
+import { recoverExtractionJobs } from './extraction/recovery.ts';
+import { runExtractionJob, type Extractor } from './extraction/worker.ts';
 import type { ApiRequest, ApiResponse } from './api/http.ts';
 import { cleanupAbandonedUploads } from './images/cleanup.ts';
 import { firestoreImageService } from './images/service.ts';
 import { firebaseObjectStore } from './images/store.ts';
+import { firestoreItemService } from './items/service.ts';
 import { amdReachabilityCheck } from './ops/amd-check.ts';
 import { firestoreShopService } from './shops/service.ts';
 import { STOREFRONT_CSS_HREF } from './storefront/config.ts';
@@ -62,6 +68,8 @@ function getApiHandler() {
   apiHandler ??= createApiHandler({
     shops: firestoreShopService(getFirestore()),
     images: firestoreImageService(getFirestore(), firebaseObjectStore()),
+    items: firestoreItemService(getFirestore()),
+    extractions: firestoreExtractionJobService(getFirestore()),
     verifyIdToken: (token) => getAuth().verifyIdToken(token),
     verifyAppCheckToken: (token) => getAppCheck().verifyToken(token),
     appCheckEnforced: appCheckEnforce.value(),
@@ -111,4 +119,43 @@ export const opsAmdCheck = onRequest({ invoker: 'private', secrets: [amdApiKey],
   logger.info('opsAmdCheck', evidence);
   res.set('Cache-Control', 'no-store');
   res.status(evidence.outcome === 'passed' ? 200 : 502).json(evidence);
+});
+
+/** Live AMD extraction, or the labeled fixture extractor inside the emulator (never deployed). */
+function extractor(): Extractor {
+  if (useExtractionFixtures(process.env)) return fixtureExtractor(getFirestore());
+  const config = amdConfig();
+  return (request) => extract(config, request);
+}
+
+/**
+ * Extraction worker (spec §8). Runs when a job is created or re-kicked while queued. Automatic
+ * trigger retries stay off so redelivery cannot multiply provider calls; leases and the recovery
+ * schedule handle crashes.
+ */
+export const extractionWorker = onDocumentWritten(
+  { document: 'shops/{shopId}/jobs/{jobId}', secrets: [amdApiKey], timeoutSeconds: 300, memory: '512MiB', maxInstances: 5, retry: false },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after || after.state !== 'queued') return;
+    if (before && before.state === 'queued' && before.kick === after.kick) return;
+    const result = await runExtractionJob(
+      {
+        db: getFirestore(),
+        store: firebaseObjectStore(),
+        extractor: extractor(),
+        log: (message, data) => logger.info(message, data),
+      },
+      event.params.shopId,
+      event.params.jobId,
+    );
+    logger.info('extractionWorker finished', { jobId: event.params.jobId, result });
+  },
+);
+
+/** Fails expired leases and wakes stalled queues (spec §8 recovery). */
+export const recoverExtractions = onSchedule({ schedule: 'every 5 minutes', timeZone: 'Asia/Tokyo', memory: '256MiB' }, async () => {
+  const result = await recoverExtractionJobs(getFirestore());
+  if (result.expired > 0 || result.kicked > 0) logger.info('recoverExtractions', result);
 });
